@@ -115,7 +115,6 @@ def uci_loop():
         line = line.strip()
         if line == "uci":
             print("Zugzwang v0.1")
-            print("id author AI Collaborator")
             print("uciok")
             sys.stdout.flush()
 
