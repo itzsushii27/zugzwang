@@ -114,7 +114,7 @@ def uci_loop():
 
         line = line.strip()
         if line == "uci":
-            print("id name BaselineBot v1.1 (Negamax+QSearch)")
+            print("Zugzwang v0.1")
             print("id author AI Collaborator")
             print("uciok")
             sys.stdout.flush()
