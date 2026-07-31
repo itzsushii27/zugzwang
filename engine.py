@@ -11,7 +11,7 @@ PIECE_VALUES = {
     chess.KING: 20000,
 }
 
-# Exponential passed pawn bonuses (scaled so max value = 340, well below a Rook)
+# Balanced passed pawn scaling
 PASSED_PAWN_BONUS = [0, 5, 15, 30, 60, 120, 240, 0]
 
 # Structural penalties (centipawns)
@@ -144,16 +144,13 @@ def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
             rank_idx = chess.square_rank(sq)
             relative_rank = rank_idx if color == chess.WHITE else 7 - rank_idx
 
-            # 1. Balanced Passed Pawn Scaling
             if is_passed_pawn(board, sq, color):
                 pawn_score += PASSED_PAWN_BONUS[relative_rank]
 
-            # 2. Doubled Pawns
             pawns_on_file = sum(1 for p_sq in pawns if chess.square_file(p_sq) == file_idx)
             if pawns_on_file > 1:
                 pawn_score -= doubled_penalty
 
-            # 3. Isolated Pawns
             adjacent_files = [f for f in [file_idx - 1, file_idx + 1] if 0 <= f <= 7]
             has_neighbors = any(any(chess.square_file(p_sq) == adj_f for p_sq in pawns) for adj_f in adjacent_files)
             if not has_neighbors:
@@ -162,6 +159,39 @@ def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
         score += pawn_score if color == board.turn else -pawn_score
 
     return score
+
+def evaluate_king_safety(board: chess.Board, king_sq: int, color: chess.Color) -> int:
+    """Evaluates Pawn Shield and file exposure for Middlegame King safety."""
+    safety_score = 0
+    file_idx = chess.square_file(king_sq)
+    rank_idx = chess.square_rank(king_sq)
+
+    # 1. Pawn Shield
+    shield_rank = rank_idx + 1 if color == chess.WHITE else rank_idx - 1
+    if 0 <= shield_rank <= 7:
+        adjacent_files = [f for f in [file_idx - 1, file_idx, file_idx + 1] if 0 <= f <= 7]
+        for f in adjacent_files:
+            sq = chess.square(f, shield_rank)
+            piece = board.piece_at(sq)
+            if piece and piece.piece_type == chess.PAWN and piece.color == color:
+                safety_score += 15
+            else:
+                safety_score -= 20
+
+    # 2. File Exposure
+    pawns_on_file = sum(
+        1 for r in range(8)
+        if (p := board.piece_at(chess.square(file_idx, r))) and p.piece_type == chess.PAWN
+    )
+    if pawns_on_file == 0:
+        safety_score -= 35  # Open file
+    elif not any(
+        (p := board.piece_at(chess.square(file_idx, r))) and p.piece_type == chess.PAWN and p.color == color
+        for r in range(8)
+    ):
+        safety_score -= 20  # Semi-open file
+
+    return safety_score
 
 def get_pst_value(piece_type: int, square: int, color: chess.Color, in_endgame: bool) -> int:
     """Fetches positional bonus/penalty for a piece on a given square."""
@@ -193,13 +223,23 @@ def evaluate_board(board: chess.Board) -> int:
     in_endgame = is_endgame(board)
     score = 0
 
+    # Material & Positional PST Evaluation
     for square in chess.SQUARES:
         piece = board.piece_at(square)
         if piece:
             total_val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
             score += total_val if piece.color == board.turn else -total_val
 
+    # Pawn Structure Evaluation
     score += evaluate_pawn_structure(board, in_endgame)
+
+    # Middlegame King Safety Evaluation
+    if not in_endgame:
+        for color in [chess.WHITE, chess.BLACK]:
+            king_sq = board.king(color)
+            if king_sq is not None:
+                k_safety = evaluate_king_safety(board, king_sq, color)
+                score += k_safety if color == board.turn else -k_safety
 
     return score
 
