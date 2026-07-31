@@ -11,7 +11,7 @@ PIECE_VALUES = {
     chess.KING: 20000,
 }
 
-# Balanced passed pawn scaling
+# Balanced passed pawn scaling (Index 0 = Rank 1, Index 6 = Rank 7)
 PASSED_PAWN_BONUS = [0, 5, 15, 30, 60, 120, 240, 0]
 
 # Structural penalties (centipawns)
@@ -20,6 +20,13 @@ DOUBLED_PAWN_PENALTY_EG = 30
 
 ISOLATED_PAWN_PENALTY_MG = 20
 ISOLATED_PAWN_PENALTY_EG = 40
+
+# Mini Opening Book for instant responses in the opening
+OPENING_BOOK = {
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR": "e2e4",  # Start pos -> 1. e4
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR": "c7c5",  # 1. e4 -> 1... c5 (Sicilian)
+    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR": "g8f6",  # 1. d4 -> 1... Nf6
+}
 
 # Piece-Square Tables (White's perspective)
 PAWN_TABLE = [
@@ -223,17 +230,15 @@ def evaluate_board(board: chess.Board) -> int:
     in_endgame = is_endgame(board)
     score = 0
 
-    # Material & Positional PST Evaluation
-    for square in chess.SQUARES:
-        piece = board.piece_at(square)
-        if piece:
-            total_val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
-            score += total_val if piece.color == board.turn else -total_val
+    # Fast iteration: Only loops over occupied squares via piece_map()!
+    for square, piece in board.piece_map().items():
+        total_val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
+        score += total_val if piece.color == board.turn else -total_val
 
-    # Pawn Structure Evaluation
+    # Pawn Structure
     score += evaluate_pawn_structure(board, in_endgame)
 
-    # Middlegame King Safety Evaluation
+    # Middlegame King Safety
     if not in_endgame:
         for color in [chess.WHITE, chess.BLACK]:
             king_sq = board.king(color)
@@ -242,6 +247,33 @@ def evaluate_board(board: chess.Board) -> int:
                 score += k_safety if color == board.turn else -k_safety
 
     return score
+
+def score_move(board: chess.Board, move: chess.Move) -> int:
+    """Assigns priority scores to moves for faster Alpha-Beta pruning."""
+    if board.is_capture(move):
+        victim = board.piece_at(move.to_square)
+        attacker = board.piece_at(move.from_square)
+        victim_val = PIECE_VALUES[victim.piece_type] if victim else 100
+        attacker_val = PIECE_VALUES[attacker.piece_type] if attacker else 100
+        return 1000 + (victim_val - attacker_val)
+
+    if board.gives_check(move):
+        return 500
+
+    # Quiet move ordering: Center control bonus for opening development
+    to_sq = move.to_square
+    if to_sq in [chess.E4, chess.D4, chess.E5, chess.D5]:
+        return 100
+    if to_sq in [chess.F3, chess.C3, chess.F6, chess.C6]:
+        return 50
+
+    return 0
+
+def order_moves(board: chess.Board) -> list:
+    """Sorts legal moves so Alpha-Beta prunes useless branches faster."""
+    moves = list(board.legal_moves)
+    moves.sort(key=lambda m: score_move(board, m), reverse=True)
+    return moves
 
 def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
     """Searches captures until a stable position is reached."""
@@ -266,7 +298,7 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
     return alpha
 
 def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
-    """Negamax search algorithm with Alpha-Beta pruning."""
+    """Negamax search algorithm with Alpha-Beta pruning and move ordering."""
     if board.is_game_over():
         return evaluate_board(board)
 
@@ -275,7 +307,8 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
 
     max_score = -float('inf')
 
-    for move in board.legal_moves:
+    # Uses ordered moves for rapid pruning
+    for move in order_moves(board):
         board.push(move)
         score = -negamax(board, depth - 1, -beta, -alpha)
         board.pop()
@@ -290,13 +323,19 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
     return max_score
 
 def get_best_move(board: chess.Board, depth: int = 3) -> chess.Move:
-    """Finds best move using Negamax search."""
+    """Finds best move using Negamax search or opening book."""
+    # 1. Opening Book Check (Instant response)
+    board_fen_position = board.fen().split(" ")[0]
+    if board_fen_position in OPENING_BOOK:
+        return chess.Move.from_uci(OPENING_BOOK[board_fen_position])
+
+    # 2. Search Tree
     best_move = None
     best_score = -float('inf')
     alpha = -float('inf')
     beta = float('inf')
 
-    for move in board.legal_moves:
+    for move in order_moves(board):
         board.push(move)
         score = -negamax(board, depth - 1, -beta, -alpha)
         board.pop()
