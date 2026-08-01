@@ -221,30 +221,19 @@ def get_pst_value(piece_type: int, square: int, color: chess.Color, in_endgame: 
     return table[sq]
 
 def evaluate_board(board: chess.Board) -> int:
-    """Evaluates relative position (Negamax perspective)."""
+    """Fast evaluation using piece values and Piece-Square tables only."""
     if board.is_checkmate():
         return -99999
     if board.is_stalemate() or board.is_insufficient_material():
         return 0
 
-    in_endgame = is_endgame(board)
     score = 0
+    in_endgame = is_endgame(board)
 
-    # Fast iteration: Only loops over occupied squares via piece_map()!
+    # Calculates material + positioning without heavy loop overhead
     for square, piece in board.piece_map().items():
-        total_val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
-        score += total_val if piece.color == board.turn else -total_val
-
-    # Pawn Structure
-    score += evaluate_pawn_structure(board, in_endgame)
-
-    # Middlegame King Safety
-    if not in_endgame:
-        for color in [chess.WHITE, chess.BLACK]:
-            king_sq = board.king(color)
-            if king_sq is not None:
-                k_safety = evaluate_king_safety(board, king_sq, color)
-                score += k_safety if color == board.turn else -k_safety
+        val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
+        score += val if piece.color == board.turn else -val
 
     return score
 
