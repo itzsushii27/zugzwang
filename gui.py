@@ -1,222 +1,135 @@
-import sys
+import tkinter as tk
 import chess
-from flask import Flask, render_template_string, request, jsonify
 import engine # Loads your engine.py
 
-app = Flask(__name__)
-board = chess.Board()
+class ChessGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Zugzwang v0.1 Desktop GUI")
+        self.board = chess.Board()
+        self.selected_square = None
 
-HTML_PAGE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Zugzwang v0.1 Web GUI</title>
-    <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            background: #181818; 
-            color: white; 
-            margin-top: 30px; 
+        # Unicode mappings
+        self.PIECES = {
+            'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+            'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚'
         }
-        #board { 
-            display: grid; 
-            grid-template-columns: repeat(8, 60px); 
-            grid-template-rows: repeat(8, 60px); 
-            border: 4px solid #404040; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            user-select: none;
-        }
-        .square { 
-            width: 60px; 
-            height: 60px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 42px; 
-            cursor: pointer; 
-            /* Force text rendering over Apple emoji rendering */
-            font-family: "Apple Symbols", "DejaVu Sans", "Symbola", "Arial", sans-serif;
-            font-variant-emoji: text;
-        }
-        .white-sq { background-color: #f0d9b5; }
-        .black-sq { background-color: #b58863; }
-        .selected { background-color: #729653 !important; }
-        .status { margin-top: 20px; font-size: 1.2rem; font-weight: bold; }
-        button { 
-            margin-top: 15px; 
-            padding: 10px 20px; 
-            font-size: 1rem; 
-            cursor: pointer; 
-            border-radius: 6px;
-            border: none;
-            background-color: #4CAF50;
-            color: white;
-            font-weight: bold;
-        }
-        button:hover { background-color: #45a049; }
-    </style>
-</head>
-<body>
-    <h2>Play vs Zugzwang v0.1</h2>
-    <div id="board"></div>
-    <div class="status" id="status">Your turn (White) - Click a piece to move</div>
-    <button onclick="resetGame()">Reset Game</button>
 
-    <script>
-        // Unicode mapping with \\uFE0E (text style selector) appended to force non-emoji rendering
-        const UNICODE_PIECES = {
-            'P': '♙\\uFE0E', 'N': '♘\\uFE0E', 'B': '♗\\uFE0E', 'R': '♖\\uFE0E', 'Q': '♕\\uFE0E', 'K': '♔\\uFE0E',
-            'p': '♟\\uFE0E', 'n': '♞\\uFE0E', 'b': '♝\\uFE0E', 'r': '♜\\uFE0E', 'q': '♛\\uFE0E', 'k': '♚\\uFE0E',
-            '': ''
-        };
+        # Status Label
+        self.status_label = tk.Label(root, text="Your turn (White)", font=("Arial", 14, "bold"), bg="#181818", fg="white")
+        self.status_label.pack(side="top", fill="x", py=10)
 
-        let selectedSquare = null;
+        # Board Container
+        self.board_frame = tk.Frame(root, bg="#404040", bd=4)
+        self.board_frame.pack(padx=20, pady=10)
 
-        function createBoard() {
-            const boardEl = document.getElementById('board');
-            boardEl.innerHTML = '';
+        # Create 8x8 Grid
+        self.squares = {}
+        for r in range(8):
+            for c in range(8):
+                sq_name = chess.square_name(chess.square(c, 7 - r))
+                is_light = (r + c) % 2 == 0
+                bg_color = "#f0d9b5" if is_light else "#b58863"
+
+                btn = tk.Button(
+                    self.board_frame,
+                    text="",
+                    font=("Arial", 36),
+                    width=2,
+                    height=1,
+                    bg=bg_color,
+                    activebackground="#729653",
+                    bd=0,
+                    command=lambda sq=sq_name: self.on_square_click(sq)
+                )
+                btn.grid(row=r, column=c)
+                self.squares[sq_name] = btn
+
+        # Reset Button
+        self.reset_btn = tk.Button(root, text="Reset Game", font=("Arial", 12), command=self.reset_game)
+        self.reset_btn.pack(side="bottom", pady=15)
+
+        self.root.configure(bg="#181818")
+        self.update_board()
+
+    def update_board(self):
+        for sq_code in chess.SQUARES:
+            sq_name = chess.square_name(sq_code)
+            piece = self.board.piece_at(sq_code)
+            btn = self.squares[sq_name]
+
+            if piece:
+                symbol = self.PIECES[piece.symbol()]
+                fg_color = "#ffffff" if piece.color == chess.WHITE else "#000000"
+                btn.config(text=symbol, fg=fg_color)
+            else:
+                btn.config(text="")
+
+    def on_square_click(self, sq_name):
+        if self.selected_square is None:
+            # First click: Select piece
+            sq_code = chess.parse_square(sq_name)
+            piece = self.board.piece_at(sq_code)
+            if piece and piece.color == self.board.turn:
+                self.selected_square = sq_name
+                self.squares[sq_name].config(bg="#729653")
+        else:
+            # Second click: Attempt Move
+            move_str = self.selected_square + sq_name
             
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const sq = document.createElement('div');
-                    const isLight = (r + c) % 2 === 0;
-                    const sqName = String.fromCharCode(97 + c) + (8 - r);
-                    
-                    sq.className = `square ${isLight ? 'white-sq' : 'black-sq'}`;
-                    sq.dataset.sq = sqName;
-                    sq.onclick = () => handleSquareClick(sqName);
-                    
-                    boardEl.appendChild(sq);
-                }
-            }
-        }
+            # Reset square colors
+            for r in range(8):
+                for c in range(8):
+                    s = chess.square_name(chess.square(c, 7 - r))
+                    is_light = (r + c) % 2 == 0
+                    self.squares[s].config(bg="#f0d9b5" if is_light else "#b58863")
 
-        function renderFen(fen) {
-            const fenParts = fen.split(' ')[0];
-            const rows = fenParts.split('/');
-            
-            for (let r = 0; r < 8; r++) {
-                let col = 0;
-                for (let char of rows[r]) {
-                    if (!isNaN(char)) {
-                        for (let i = 0; i < parseInt(char); i++) {
-                            const sqName = String.fromCharCode(97 + col) + (8 - r);
-                            const sqEl = document.querySelector(`[data-sq="${sqName}"]`);
-                            sqEl.innerText = '';
-                            col++;
-                        }
-                    } else {
-                        const sqName = String.fromCharCode(97 + col) + (8 - r);
-                        const sqEl = document.querySelector(`[data-sq="${sqName}"]`);
-                        sqEl.innerText = UNICODE_PIECES[char] || '';
-                        
-                        // Distinct styling for black vs white pieces
-                        const isWhitePiece = (char === char.toUpperCase());
-                        sqEl.style.color = isWhitePiece ? '#ffffff' : '#222222';
-                        sqEl.style.textShadow = isWhitePiece ? '0 0 3px #000000' : 'none';
-                        col++;
-                    }
-                }
-            }
-        }
+            # Check promotion
+            move = chess.Move.from_uci(move_str)
+            if chess.Move.from_uci(move_str + 'q') in self.board.legal_moves:
+                move = chess.Move.from_uci(move_str + 'q')
 
-        function handleSquareClick(sqName) {
-            if (!selectedSquare) {
-                const sqEl = document.querySelector(`[data-sq="${sqName}"]`);
-                if (sqEl.innerText !== '') {
-                    selectedSquare = sqName;
-                    sqEl.classList.add('selected');
-                }
-            } else {
-                const move = selectedSquare + sqName;
-                document.querySelectorAll('.square').forEach(el => el.classList.remove('selected'));
-                
-                fetch('/move', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: `move=${move}`
-                })
-                .then(res => res.json())
-                .then(data => {
-                    selectedSquare = null;
-                    if (data.status === 'ok') {
-                        renderFen(data.fen);
-                        if (data.game_over) {
-                            document.getElementById('status').innerText = 'Game Over!';
-                            return;
-                        }
-                        document.getElementById('status').innerText = 'Zugzwang is thinking...';
-                        
-                        setTimeout(() => {
-                            fetch('/bot_move', { method: 'POST' })
-                            .then(res => res.json())
-                            .then(botData => {
-                                renderFen(botData.fen);
-                                if (botData.game_over) {
-                                    document.getElementById('status').innerText = 'Game Over!';
-                                } else {
-                                    document.getElementById('status').innerText = 'Your turn (White)';
-                                }
-                            });
-                        }, 200);
-                    }
-                });
-            }
-        }
+            self.selected_square = None
 
-        function resetGame() {
-            selectedSquare = null;
-            document.querySelectorAll('.square').forEach(el => el.classList.remove('selected'));
-            fetch('/reset', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                renderFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-                document.getElementById('status').innerText = 'Your turn (White)';
-            });
-        }
+            if move in self.board.legal_moves:
+                self.board.push(move)
+                self.update_board()
 
-        createBoard();
-        renderFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    </script>
-</body>
-</html>
-"""
+                if self.board.is_game_over():
+                    self.status_label.config(text="Game Over!")
+                    return
 
-@app.route('/')
-def index():
-    return render_template_string(HTML_PAGE)
+                self.status_label.config(text="Zugzwang is thinking...")
+                self.root.update()
 
-@app.route('/move', methods=['POST'])
-def make_move():
-    move_uci = request.form.get('move')
-    try:
-        move = chess.Move.from_uci(move_uci)
-        if chess.Move.from_uci(move_uci + 'q') in board.legal_moves:
-            move = chess.Move.from_uci(move_uci + 'q')
+                # Bot Move
+                self.root.after(200, self.make_bot_move)
 
-        if move in board.legal_moves:
-            board.push(move)
-            return jsonify({'status': 'ok', 'fen': board.fen(), 'game_over': board.is_game_over()})
-    except Exception:
-        pass
-    return jsonify({'status': 'illegal'})
+    def make_bot_move(self):
+        if not self.board.is_game_over():
+            best_move = engine.get_best_move(self.board, depth=3)
+            self.board.push(best_move)
+            self.update_board()
 
-@app.route('/bot_move', methods=['POST'])
-def bot_move():
-    if not board.is_game_over():
-        best_move = engine.get_best_move(board, depth=3)
-        board.push(best_move)
-    return jsonify({'fen': board.fen(), 'game_over': board.is_game_over()})
+            if self.board.is_game_over():
+                self.status_label.config(text="Game Over!")
+            else:
+                self.status_label.config(text="Your turn (White)")
 
-@app.route('/reset', methods=['POST'])
-def reset():
-    board.reset()
-    return jsonify({'status': 'ok'})
+    def reset_game(self):
+        self.board.reset()
+        self.selected_square = None
+        self.status_label.config(text="Your turn (White)")
+        
+        for r in range(8):
+            for c in range(8):
+                s = chess.square_name(chess.square(c, 7 - r))
+                is_light = (r + c) % 2 == 0
+                self.squares[s].config(bg="#f0d9b5" if is_light else "#b58863")
 
-if __name__ == '__main__':
-    print("\nStarting Web GUI...")
-    print("Open your browser and go to: http://127.0.0.1:5000\n")
-    app.run(port=5000)
+        self.update_board()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ChessGUI(root)
+    root.mainloop()
