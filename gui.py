@@ -1,6 +1,6 @@
 import tkinter as tk
 import chess
-import engine # Loads your engine.py
+import engine  # Loads your engine.py
 
 class ChessGUI:
     def __init__(self, root):
