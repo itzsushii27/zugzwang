@@ -221,8 +221,23 @@ def get_pst_value(piece_type: int, square: int, color: chess.Color, in_endgame: 
     sq = square if color == chess.WHITE else chess.square_mirror(square)
     return table[sq]
 
+def get_mobility_score(board: chess.Board) -> int:
+    """Calculates piece mobility (1 centipawn per legal move square available)."""
+    mobility_score = 0
+    turn = board.turn
+
+    for sq in chess.SQUARES:
+        piece = board.piece_at(sq)
+        if piece is None or piece.piece_type == chess.KING:
+            continue
+            
+        attacks = len(board.attacks(sq))
+        mobility_score += attacks if piece.color == turn else -attacks
+
+    return mobility_score
+
 def evaluate_board(board: chess.Board) -> int:
-    """Fast evaluation using piece values and Piece-Square tables only."""
+    """Complete evaluation using Material, PSTs, Mobility, Pawn Structure, and King Safety."""
     if board.is_checkmate():
         return -99999
     if board.is_stalemate() or board.is_insufficient_material():
@@ -230,11 +245,30 @@ def evaluate_board(board: chess.Board) -> int:
 
     score = 0
     in_endgame = is_endgame(board)
+    turn = board.turn
 
-    # Calculates material + positioning without heavy loop overhead
+    # 1. Material + Piece-Square Tables
     for square, piece in board.piece_map().items():
         val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
-        score += val if piece.color == board.turn else -val
+        score += val if piece.color == turn else -val
+
+    # 2. Piece Mobility
+    score += get_mobility_score(board)
+
+    # 3. Pawn Structure
+    score += evaluate_pawn_structure(board, in_endgame)
+
+    # 4. King Safety
+    if not in_endgame:
+        white_king_sq = board.king(chess.WHITE)
+        black_king_sq = board.king(chess.BLACK)
+
+        if white_king_sq is not None and black_king_sq is not None:
+            w_safety = evaluate_king_safety(board, white_king_sq, chess.WHITE)
+            b_safety = evaluate_king_safety(board, black_king_sq, chess.BLACK)
+            
+            score += w_safety if turn == chess.WHITE else -w_safety
+            score -= b_safety if turn == chess.WHITE else -b_safety
 
     return score
 
@@ -250,7 +284,6 @@ def score_move(board: chess.Board, move: chess.Move) -> int:
     if board.gives_check(move):
         return 500
 
-    # Quiet move ordering: Center control bonus for opening development
     to_sq = move.to_square
     if to_sq in [chess.E4, chess.D4, chess.E5, chess.D5]:
         return 100
@@ -297,7 +330,6 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
 
     max_score = -float('inf')
 
-    # Uses ordered moves for rapid pruning
     for move in order_moves(board):
         board.push(move)
         score = -negamax(board, depth - 1, -beta, -alpha)
@@ -314,12 +346,10 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
 
 def get_best_move(board: chess.Board, depth: int = 3) -> chess.Move:
     """Finds best move using Negamax search or opening book."""
-    # 1. Opening Book Check (Instant response)
     board_fen_position = board.fen().split(" ")[0]
     if board_fen_position in OPENING_BOOK:
         return chess.Move.from_uci(OPENING_BOOK[board_fen_position])
 
-    # 2. Search Tree
     best_move = None
     best_score = -float('inf')
     alpha = -float('inf')
