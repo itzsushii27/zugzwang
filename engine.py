@@ -382,7 +382,6 @@ def uci_loop():
             print("id name Zugzwang v0.1")
             print("uciok")
             sys.stdout.flush()
-
         elif line == "isready":
             print("readyok")
             sys.stdout.flush()
@@ -411,12 +410,16 @@ def uci_loop():
                     for move_str in tokens[move_idx:]:
                         board.push_uci(move_str)
 
-                        elif line.startswith("go"):
+        elif line.startswith("go"):
             best_move = get_best_move(board, depth=3)
             print(f"info depth 3 score cp 0 pv {best_move.uci()}")
             sys.stdout.flush()
             print(f"bestmove {best_move.uci()}")
             sys.stdout.flush()
+
+        elif line == "quit":
+            break
+
 
 if __name__ == "__main__":
     uci_loop()
