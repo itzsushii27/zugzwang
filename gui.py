@@ -17,7 +17,7 @@ class ChessGUI:
 
         # Status Label
         self.status_label = tk.Label(root, text="Your turn (White)", font=("Arial", 14, "bold"), bg="#181818", fg="white")
-        self.status_label.pack(side="top", fill="x", py=10)
+        self.status_label.pack(side="top", fill="x", pady=10)
 
         # Board Container
         self.board_frame = tk.Frame(root, bg="#404040", bd=4)
