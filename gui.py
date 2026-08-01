@@ -16,54 +16,69 @@ class ChessGUI:
         }
 
         # Status Label
-        self.status_label = tk.Label(root, text="Your turn (White)", font=("Arial", 14, "bold"), bg="#181818", fg="white")
-        self.status_label.pack(side="top", fill="x", pady=10)
+        self.status_label = tk.Label(root, text="Your turn (White)", font=("Arial", 16, "bold"), bg="#1e1e1e", fg="#ffffff")
+        self.status_label.pack(side="top", fill="x", pady=15)
 
         # Board Container
-        self.board_frame = tk.Frame(root, bg="#404040", bd=4)
+        self.board_frame = tk.Frame(root, bg="#2b2b2b", bd=6)
         self.board_frame.pack(padx=20, pady=10)
 
-        # Create 8x8 Grid
+        # Create 8x8 Grid using Canvas for true background colors
         self.squares = {}
         for r in range(8):
             for c in range(8):
                 sq_name = chess.square_name(chess.square(c, 7 - r))
                 is_light = (r + c) % 2 == 0
-                bg_color = "#f0d9b5" if is_light else "#b58863"
+                bg_color = "#eeeed2" if is_light else "#769656" # Clean green/cream Lichess style
 
-                btn = tk.Button(
+                canvas = tk.Canvas(
                     self.board_frame,
-                    text="",
-                    font=("Arial", 36),
-                    width=2,
-                    height=1,
+                    width=60,
+                    height=60,
                     bg=bg_color,
-                    activebackground="#729653",
-                    bd=0,
-                    command=lambda sq=sq_name: self.on_square_click(sq)
+                    highlightthickness=0
                 )
-                btn.grid(row=r, column=c)
-                self.squares[sq_name] = btn
+                canvas.grid(row=r, column=c)
+                canvas.bind("<Button-1>", lambda event, sq=sq_name: self.on_square_click(sq))
+                
+                self.squares[sq_name] = {
+                    "canvas": canvas,
+                    "default_bg": bg_color
+                }
 
         # Reset Button
-        self.reset_btn = tk.Button(root, text="Reset Game", font=("Arial", 12), command=self.reset_game)
+        self.reset_btn = tk.Button(
+            root, 
+            text="Reset Game", 
+            font=("Arial", 12, "bold"), 
+            bg="#4CAF50", 
+            fg="black", 
+            padx=10, 
+            pady=5, 
+            command=self.reset_game
+        )
         self.reset_btn.pack(side="bottom", pady=15)
 
-        self.root.configure(bg="#181818")
+        self.root.configure(bg="#1e1e1e")
         self.update_board()
 
     def update_board(self):
         for sq_code in chess.SQUARES:
             sq_name = chess.square_name(sq_code)
             piece = self.board.piece_at(sq_code)
-            btn = self.squares[sq_name]
+            canvas = self.squares[sq_name]["canvas"]
+
+            # Clear previous piece
+            canvas.delete("all")
 
             if piece:
                 symbol = self.PIECES[piece.symbol()]
-                fg_color = "#ffffff" if piece.color == chess.WHITE else "#000000"
-                btn.config(text=symbol, fg=fg_color)
-            else:
-                btn.config(text="")
+                # High contrast styling: Pure white with shadow for White, Dark Charcoal for Black
+                if piece.color == chess.WHITE:
+                    canvas.create_text(31, 31, text=symbol, font=("Arial", 42), fill="#000000") # Shadow
+                    canvas.create_text(30, 30, text=symbol, font=("Arial", 42), fill="#ffffff") # White piece
+                else:
+                    canvas.create_text(30, 30, text=symbol, font=("Arial", 42), fill="#111111") # Black piece
 
     def on_square_click(self, sq_name):
         if self.selected_square is None:
@@ -72,17 +87,14 @@ class ChessGUI:
             piece = self.board.piece_at(sq_code)
             if piece and piece.color == self.board.turn:
                 self.selected_square = sq_name
-                self.squares[sq_name].config(bg="#729653")
+                self.squares[sq_name]["canvas"].config(bg="#baca44") # Highlight color
         else:
             # Second click: Attempt Move
             move_str = self.selected_square + sq_name
             
-            # Reset square colors
-            for r in range(8):
-                for c in range(8):
-                    s = chess.square_name(chess.square(c, 7 - r))
-                    is_light = (r + c) % 2 == 0
-                    self.squares[s].config(bg="#f0d9b5" if is_light else "#b58863")
+            # Reset all square colors
+            for s in self.squares:
+                self.squares[s]["canvas"].config(bg=self.squares[s]["default_bg"])
 
             # Check promotion
             move = chess.Move.from_uci(move_str)
@@ -121,11 +133,8 @@ class ChessGUI:
         self.selected_square = None
         self.status_label.config(text="Your turn (White)")
         
-        for r in range(8):
-            for c in range(8):
-                s = chess.square_name(chess.square(c, 7 - r))
-                is_light = (r + c) % 2 == 0
-                self.squares[s].config(bg="#f0d9b5" if is_light else "#b58863")
+        for s in self.squares:
+            self.squares[s]["canvas"].config(bg=self.squares[s]["default_bg"])
 
         self.update_board()
 
