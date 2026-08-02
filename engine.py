@@ -259,8 +259,8 @@ def evaluate_board(board: chess.Board) -> int:
     in_endgame = is_endgame(board)
 
     for square, piece in board.piece_map().items():
-    if piece.piece_type == chess.KING:
-        continue
+        if piece.piece_type == chess.KING:
+            continue
 
     attackers = len(board.attackers(not piece.color, square))
     defenders = len(board.attackers(piece.color, square))
