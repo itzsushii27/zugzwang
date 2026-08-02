@@ -980,7 +980,7 @@ def uci_loop():
  
         line = line.strip()
         if line == "uci":
-            print("id name Zugzwang")
+            print("id name Zugzwang v0.3")
             print("id author Zugzwang contributors")
             print(f"option name Depth type spin default {DEFAULT_MAX_DEPTH} min 1 max {MAX_ALLOWED_DEPTH}")
             print("uciok")
