@@ -202,7 +202,7 @@ PST_MAP = {
 }
 
 def is_endgame(board: chess.Board) -> bool:
-    """Detects if position is in endgame phase using fast bit counts."""
+    """Detects if position is in endgame phase."""
     queens = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))
     if queens == 0:
         return True
@@ -215,7 +215,7 @@ def is_endgame(board: chess.Board) -> bool:
     return minors_majors <= 2
 
 def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
-    """Evaluates passed, doubled, and isolated pawns using bitwise mask operations."""
+    """Evaluates passed, doubled, and isolated pawns safely and quickly."""
     score = 0
     doubled_penalty = DOUBLED_PAWN_PENALTY_EG if in_endgame else DOUBLED_PAWN_PENALTY_MG
     isolated_penalty = ISOLATED_PAWN_PENALTY_EG if in_endgame else ISOLATED_PAWN_PENALTY_MG
@@ -232,8 +232,20 @@ def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
             rank_idx = chess.square_rank(sq)
             relative_rank = rank_idx if is_white else 7 - rank_idx
 
-            # Passed Pawn Check (O(1) Bitwise AND)
-            if not (enemy_pawns & chess.BB_PASSED_PAWNS[color][sq]):
+            # Passed Pawn Mask Check
+            if is_white:
+                forward_mask = 0xFFFFFFFFFFFFFFFF << ((rank_idx + 1) * 8)
+            else:
+                forward_mask = (1 << (rank_idx * 8)) - 1
+
+            file_mask = chess.BB_FILES[file_idx]
+            if file_idx > 0:
+                file_mask |= chess.BB_FILES[file_idx - 1]
+            if file_idx < 7:
+                file_mask |= chess.BB_FILES[file_idx + 1]
+
+            passed_mask = forward_mask & file_mask
+            if not (enemy_pawns & passed_mask):
                 pawn_score += PASSED_PAWN_BONUS[relative_rank]
 
             # Doubled Pawn Check
@@ -241,7 +253,12 @@ def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
                 pawn_score -= doubled_penalty
 
             # Isolated Pawn Check
-            adj_files = chess.BB_FILES[max(0, file_idx - 1)] | chess.BB_FILES[min(7, file_idx + 1)]
+            adj_files = 0
+            if file_idx > 0:
+                adj_files |= chess.BB_FILES[file_idx - 1]
+            if file_idx < 7:
+                adj_files |= chess.BB_FILES[file_idx + 1]
+
             if not (pawns & adj_files):
                 pawn_score -= isolated_penalty
 
@@ -250,26 +267,21 @@ def evaluate_pawn_structure(board: chess.Board, in_endgame: bool) -> int:
     return score
 
 def evaluate_king_safety(board: chess.Board, king_sq: int, color: chess.Color) -> int:
-    """Evaluates Pawn Shield and file exposure using bitwise checks."""
+    """Evaluates Pawn Shield and file exposure."""
     safety_score = 0
     file_idx = chess.square_file(king_sq)
     rank_idx = chess.square_rank(king_sq)
     shield_rank = rank_idx + 1 if color == chess.WHITE else rank_idx - 1
 
+    own_pawns = board.pieces(chess.PAWN, color)
+
     # 1. Pawn Shield
     if 0 <= shield_rank <= 7:
-        adjacent_files_mask = chess.BB_FILES[file_idx]
-        if file_idx > 0:
-            adjacent_files_mask |= chess.BB_FILES[file_idx - 1]
-        if file_idx < 7:
-            adjacent_files_mask |= chess.BB_FILES[file_idx + 1]
-
-        rank_mask = chess.BB_RANKS[shield_rank]
-        shield_sqs = adjacent_files_mask & rank_mask
-        own_pawns = board.pieces(chess.PAWN, color)
-
-        for sq in chess.SquareSet(shield_sqs):
-            if sq & own_pawns:
+        f_min = max(0, file_idx - 1)
+        f_max = min(7, file_idx + 1)
+        for f in range(f_min, f_max + 1):
+            sq = chess.square(f, shield_rank)
+            if sq in own_pawns:
                 safety_score += 15
             else:
                 safety_score -= 20
@@ -277,16 +289,16 @@ def evaluate_king_safety(board: chess.Board, king_sq: int, color: chess.Color) -
     # 2. File Exposure
     file_mask = chess.BB_FILES[file_idx]
     all_pawns = board.pieces(chess.PAWN, chess.WHITE) | board.pieces(chess.PAWN, chess.BLACK)
-    
+
     if not (all_pawns & file_mask):
         safety_score -= 35  # Open file
-    elif not (board.pieces(chess.PAWN, color) & file_mask):
+    elif not (own_pawns & file_mask):
         safety_score -= 20  # Semi-open file
 
     return safety_score
 
 def evaluate_rook_files(board: chess.Board) -> int:
-    """Rewards rooks on open or semi-open files using bitwise masks."""
+    """Rewards rooks on open or semi-open files."""
     score = 0
     all_pawns = board.pieces(chess.PAWN, chess.WHITE) | board.pieces(chess.PAWN, chess.BLACK)
 
@@ -310,7 +322,7 @@ def evaluate_rook_files(board: chess.Board) -> int:
     return score
 
 def evaluate_board(board: chess.Board) -> int:
-    """Complete, highly optimized evaluation using zero-allocation bitboard scans."""
+    """Complete evaluation using single-pass iteration."""
     if board.is_checkmate():
         return -99999
     if board.is_stalemate() or board.is_insufficient_material():
@@ -320,7 +332,6 @@ def evaluate_board(board: chess.Board) -> int:
     in_endgame = is_endgame(board)
     material_balance = 0
 
-    # Zero-allocation piece iteration via board.pieces()
     for color in (chess.WHITE, chess.BLACK):
         is_white = color == chess.WHITE
         multiplier = 1 if is_white else -1
@@ -329,7 +340,7 @@ def evaluate_board(board: chess.Board) -> int:
             piece_val = PIECE_VALUES[piece_type]
             table_mg, table_eg = PST_MAP[piece_type]
             table = table_eg if in_endgame else table_mg
-            
+
             squares = board.pieces(piece_type, color)
 
             for sq in squares:
@@ -430,7 +441,7 @@ def order_moves(board: chess.Board, tt_move: chess.Move = None, depth: int = Non
     return moves
 
 def quiescence_search(board: chess.Board, alpha: int, beta: int, qdepth: int = 0) -> int:
-    """Searches captures/promotions with a depth ceiling to prevent tree explosions."""
+    """Searches captures/promotions with depth safety cap."""
     if qdepth >= MAX_QSEARCH_DEPTH:
         return evaluate_board(board)
 
@@ -679,7 +690,11 @@ def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
             print(f"info depth {depth} score cp {int(score)} pv {pv_str}")
         sys.stdout.flush()
 
-    return best_move if best_move else list(board.legal_moves)[0]
+    if best_move is None:
+        legal_moves = list(board.legal_moves)
+        return legal_moves[0] if legal_moves else chess.Move.null()
+
+    return best_move
 
 def uci_loop():
     board = chess.Board()
