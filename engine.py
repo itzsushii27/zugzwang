@@ -10,6 +10,10 @@ TT_UPPERBOUND = 2  # real score is <= stored score (failed to raise alpha)
  
 transposition_table = {}
 MAX_TT_ENTRIES = 2_000_000
+
+# Move Ordering Tables
+killer_moves = {}
+history_table = {}  # (from_square, to_square) -> score
  
 # UCI "Depth" option bounds
 DEFAULT_MAX_DEPTH = 5
@@ -338,7 +342,6 @@ def evaluate_repetition(board: chess.Board) -> int:
     return 0
 
 def evaluate_board(board: chess.Board, ply: int = 0) -> int:
-    """Evaluates terminal/quiet positions. Mate scores are ply-adjusted."""
     if board.is_checkmate():
         return -(MATE_VALUE - ply)
     if board.is_stalemate() or board.is_insufficient_material():
@@ -400,8 +403,6 @@ def evaluate_board(board: chess.Board, ply: int = 0) -> int:
 
     return score if board.turn == chess.WHITE else -score
 
-killer_moves = {}
-
 def _store_killer(depth: int, move: chess.Move) -> None:
     if move.promotion is not None:
         return
@@ -435,6 +436,11 @@ def score_move(board: chess.Board, move: chess.Move, tt_move: chess.Move = None,
             return 600
         if move == killers[1]:
             return 550
+
+    # History Heuristic Score
+    hist_score = history_table.get((move.from_square, move.to_square), 0)
+    if hist_score > 0:
+        return min(500, hist_score)
 
     to_sq = move.to_square
     if to_sq in [chess.E4, chess.D4, chess.E5, chess.D5]:
@@ -544,6 +550,7 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0,
         _tt_store(key, depth, score, flag, None)
         return score
 
+    # Null Move Pruning
     if (
         allow_null
         and depth >= NULL_MOVE_MIN_DEPTH
@@ -567,11 +574,36 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0,
 
     max_score = -float('inf')
     best_move_here = None
+    moves = order_moves(board, tt_move, depth)
 
-    for move in order_moves(board, tt_move, depth):
+    in_check = board.is_check()
+
+    for move_count, move in enumerate(moves):
         is_capture = board.is_capture(move)
         board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
+
+        # --- LATE MOVE REDUCTIONS (LMR) ---
+        if (
+            move_count >= 3
+            and depth >= 3
+            and not is_capture
+            and not in_check
+            and not move.promotion
+            and not board.is_check()  # didn't give check
+        ):
+            # Search late quiet move at reduced depth
+            reduction = 2 if move_count >= 6 else 1
+            reduced_depth = max(1, depth - 1 - reduction)
+            
+            score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1)
+
+            # If reduced search raised alpha, re-search at full depth
+            if score > alpha and reduced_depth < depth - 1:
+                score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
+        else:
+            # Full Depth Search
+            score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
+
         board.pop()
 
         if score > max_score:
@@ -582,6 +614,9 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0,
         if alpha >= beta:
             if not is_capture:
                 _store_killer(depth, move)
+                # Update History Heuristic
+                hist_key = (move.from_square, move.to_square)
+                history_table[hist_key] = history_table.get(hist_key, 0) + depth * depth
             break
 
     if max_score <= original_alpha:
@@ -602,7 +637,6 @@ def _position_key(board: chess.Board):
         return chess.polyglot.zobrist_hash(board)
 
 def _tt_store(key: int, depth: int, score: int, flag: int, move) -> None:
-    """Depth-preferred replacement policy to prevent shallow/TT contamination."""
     if len(transposition_table) > MAX_TT_ENTRIES:
         transposition_table.clear()
         
@@ -682,9 +716,7 @@ def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
 
         move, score = search_at_depth(board, depth, alpha, beta)
 
-        # Aspiration failure handling
         if score <= alpha or score >= beta:
-            # Clear stored TT entry for root to force clean full re-search
             root_key = _position_key(board)
             if root_key in transposition_table:
                 del transposition_table[root_key]
@@ -740,6 +772,7 @@ def uci_loop():
             board = chess.Board()
             transposition_table.clear()
             killer_moves.clear()
+            history_table.clear()
 
         elif line.startswith("setoption"):
             tokens = line.split()
