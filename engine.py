@@ -16,6 +16,7 @@ DEFAULT_MAX_DEPTH = 5
 MAX_ALLOWED_DEPTH = 20
  
 MATE_SCORE_THRESHOLD = 90000
+MATE_VALUE = 99999
  
 NULL_MOVE_MIN_DEPTH = 3
 NULL_MOVE_REDUCTION = 2
@@ -336,9 +337,10 @@ def evaluate_repetition(board: chess.Board) -> int:
 
     return 0
 
-def evaluate_board(board: chess.Board) -> int:
+def evaluate_board(board: chess.Board, ply: int = 0) -> int:
+    """Evaluates terminal/quiet positions. Mate scores are ply-adjusted."""
     if board.is_checkmate():
-        return -99999
+        return -(MATE_VALUE - ply)
     if board.is_stalemate() or board.is_insufficient_material():
         return 0
 
@@ -448,8 +450,8 @@ def order_moves(board: chess.Board, tt_move: chess.Move = None, depth: int = Non
     moves.sort(key=lambda m: score_move(board, m, tt_move, killers), reverse=True)
     return moves
 
-def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
-    stand_pat = evaluate_board(board)
+def quiescence_search(board: chess.Board, alpha: int, beta: int, ply: int = 0) -> int:
+    stand_pat = evaluate_board(board, ply)
 
     if stand_pat >= beta:
         return beta
@@ -478,7 +480,7 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
             break
 
         board.push(move)
-        score = -quiescence_search(board, -beta, -alpha)
+        score = -quiescence_search(board, -beta, -alpha, ply + 1)
         board.pop()
 
         if score >= beta:
@@ -497,9 +499,9 @@ def _has_non_pawn_material(board: chess.Board, color: chess.Color) -> bool:
         or len(board.pieces(chess.QUEEN, color))
     )
 
-def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: bool = True) -> int:
+def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0, allow_null: bool = True) -> int:
     if board.is_repetition(2):
-        eval_score = evaluate_board(board)
+        eval_score = evaluate_board(board, ply)
         if eval_score > 150:
             return -200
         if eval_score < -150:
@@ -507,7 +509,7 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: b
         return 0
 
     if board.is_game_over():
-        return evaluate_board(board)
+        return evaluate_board(board, ply)
 
     original_alpha = alpha
     original_beta = beta
@@ -530,7 +532,7 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: b
                 return tt_score
 
     if depth == 0:
-        score = quiescence_search(board, alpha, beta)
+        score = quiescence_search(board, alpha, beta, ply)
 
         if score <= original_alpha:
             flag = TT_UPPERBOUND
@@ -555,6 +557,7 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: b
             depth - 1 - NULL_MOVE_REDUCTION,
             -beta,
             -beta + 1,
+            ply + 1,
             allow_null=False,
         )
         board.pop()
@@ -568,7 +571,7 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: b
     for move in order_moves(board, tt_move, depth):
         is_capture = board.is_capture(move)
         board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha)
+        score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
         board.pop()
 
         if score > max_score:
@@ -599,9 +602,13 @@ def _position_key(board: chess.Board):
         return chess.polyglot.zobrist_hash(board)
 
 def _tt_store(key: int, depth: int, score: int, flag: int, move) -> None:
+    """Depth-preferred replacement policy to prevent shallow/TT contamination."""
     if len(transposition_table) > MAX_TT_ENTRIES:
         transposition_table.clear()
-    transposition_table[key] = (depth, score, flag, move)
+        
+    existing = transposition_table.get(key)
+    if existing is None or depth >= existing[0]:
+        transposition_table[key] = (depth, score, flag, move)
 
 def search_at_depth(board: chess.Board, depth: int, alpha: float = -float('inf'),
                      beta: float = float('inf')):
@@ -614,7 +621,7 @@ def search_at_depth(board: chess.Board, depth: int, alpha: float = -float('inf')
 
     for move in order_moves(board, tt_move, depth):
         board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha)
+        score = -negamax(board, depth - 1, -beta, -alpha, 1)
         board.pop()
 
         if score > best_score:
@@ -675,7 +682,12 @@ def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
 
         move, score = search_at_depth(board, depth, alpha, beta)
 
+        # Aspiration failure handling
         if score <= alpha or score >= beta:
+            # Clear stored TT entry for root to force clean full re-search
+            root_key = _position_key(board)
+            if root_key in transposition_table:
+                del transposition_table[root_key]
             move, score = search_at_depth(board, depth, -float('inf'), float('inf'))
 
         if move:
@@ -690,7 +702,7 @@ def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
 
         try:
             if abs(score) >= MATE_SCORE_THRESHOLD:
-                mate_in = max(1, (depth + 1) // 2)
+                mate_in = max(1, (MATE_VALUE - abs(score) + 1) // 2)
                 mate_score = mate_in if score > 0 else -mate_in
                 print(f"info depth {depth} score mate {mate_score} pv {pv_str}")
             else:
