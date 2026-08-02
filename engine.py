@@ -1,30 +1,14 @@
 #!/usr/bin/env python3
 import sys
 import chess
-import chess.polyglot
- 
-# --- Transposition Table -----------------------------------------------
-TT_EXACT = 0       # score is the true value of the position
-TT_LOWERBOUND = 1  # real score is >= stored score (from a beta cutoff)
-TT_UPPERBOUND = 2  # real score is <= stored score (failed to raise alpha)
- 
-transposition_table = {}
-MAX_TT_ENTRIES = 2_000_000
 
-# Move Ordering Tables
-killer_moves = {}
-history_table = {}  # (from_square, to_square) -> score
- 
 # UCI "Depth" option bounds
-DEFAULT_MAX_DEPTH = 5
+DEFAULT_MAX_DEPTH = 4
 MAX_ALLOWED_DEPTH = 20
- 
+
 MATE_SCORE_THRESHOLD = 90000
 MATE_VALUE = 99999
- 
-NULL_MOVE_MIN_DEPTH = 3
-NULL_MOVE_REDUCTION = 2
- 
+
 # Base piece values in centipawns
 PIECE_VALUES = {
     chess.PAWN: 100,
@@ -34,156 +18,116 @@ PIECE_VALUES = {
     chess.QUEEN: 900,
     chess.KING: 20000,
 }
- 
+
 STARTING_PIECE_MATERIAL = (
     2 * PIECE_VALUES[chess.KNIGHT]
     + 2 * PIECE_VALUES[chess.BISHOP]
     + 2 * PIECE_VALUES[chess.ROOK]
     + PIECE_VALUES[chess.QUEEN]
 )
- 
+
 PASSED_PAWN_BONUS = [0, 5, 15, 30, 60, 120, 240, 0]
- 
-DOUBLED_PAWN_PENALTY_MG = 8
-DOUBLED_PAWN_PENALTY_EG = 15
- 
-ISOLATED_PAWN_PENALTY_MG = 10
-ISOLATED_PAWN_PENALTY_EG = 20
- 
-# Mini Opening Book
-OPENING_BOOK = {
-    # 1. FIRST MOVES
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR": "e2e4",  # White: 1. e4
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR": "e7e5",  # Black vs 1. e4 -> 1... e5
-    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR": "g8f6",  # Black vs 1. d4 -> 1... Nf6
-    "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPP1/RNBQKBNR": "e7e5",  # Black vs 1. c4 -> 1... e5
-    "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R": "d7d5",  # Black vs 1. Nf3 -> 1... d5
 
-    # 2. OPEN GAME & ITALIAN SYSTEM
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "b8c6",
-    "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "f1c4",
-    "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R": "f8c5",
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R": "g8f6",
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R": "g8f6",
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1": "g8f6",
-    "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R": "f1c4",
-    "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R": "d2d3",
-    "r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R": "e5d4",
-    
-    # Custom Bd3 retreat position
-    "r1bqkb1r/ppp2ppp/2n5/3pp3/2B1N3/5N2/PPPP1PPP/R1BQK2R": "c4d3",
+DOUBLED_PAWN_PENALTY_MG = 15
+DOUBLED_PAWN_PENALTY_EG = 30
 
-    # 3. OTHER BLACK DEFENSES (1. e4)
-    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",
-    "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",
-    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
-    "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
-    "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR": "e4d5",
-    "rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
-    "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR": "e4e5",
-    "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
+ISOLATED_PAWN_PENALTY_MG = 20
+ISOLATED_PAWN_PENALTY_EG = 40
 
-    # 4. BLACK REPERTOIRE
-    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR": "c2c4",
-    "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",
-    "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",
-    "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/2N5/PP2PPPP/R1BQKBNR": "f8b4",
-    "rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPP1/R1BQKBNR": "g8f6",
-    "rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R": "g8f6",
-}
- 
 # Piece-Square Tables (White's perspective)
 PAWN_TABLE = [
      0,  0,  0,  0,  0,  0,  0,  0,
-    25, 25, 25, 25, 25, 25, 25, 25,
-     5,  5, 10, 15, 15, 10,  5,  5,
-     3,  3,  5, 13, 13,  5,  3,  3,
-     0,  0,  0, 10, 10,  0,  0,  0,
-     3, -3, -5,  0,  0, -5, -3,  3,
-     3,  5,  5,-10,-10,  5,  5,  3,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
      0,  0,  0,  0,  0,  0,  0,  0
 ]
- 
+
 KNIGHT_TABLE = [
-   -25,-20,-15,-15,-15,-15,-20,-25,
-   -20,-10,  0,  0,  0,  0,-10,-20,
-   -15,  0, 10,  8,  8, 10,  0,-15,
-   -15,  3,  8,  8,  8,  8,  3,-15,
-   -15,  0,  8,  8,  8,  8,  0,-15,
-   -15,  3, 10,  8,  8, 10,  3,-15,
-   -20,-10,  0,  3,  3,  0,-10,-20,
-   -25,-20,-15,-15,-15,-15,-20,-25
-]
- 
-BISHOP_TABLE = [
-   -10, -5, -5, -5, -5, -5, -5,-10,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  3,  5,  5,  3,  0, -5,
-    -5,  3,  3,  5,  5,  3,  3, -5,
-    -5,  0,  5,  5,  5,  5,  0, -5,
-    -5,  5,  5,  5,  5,  5,  5, -5,
-    -5,  3,  0,  0,  0,  0,  3, -5,
-   -10, -5, -5, -5, -5, -5, -5,-10
-]
- 
-ROOK_TABLE = [
-     0,  0,  0,  0,  0,  0,  0,  0,
-     3,  5,  5,  5,  5,  5,  5,  3,
-    -3,  0,  0,  0,  0,  0,  0, -3,
-    -3,  0,  0,  0,  0,  0,  0, -3,
-    -3,  0,  0,  0,  0,  0,  0, -3,
-    -3,  0,  0,  0,  0,  0,  0, -3,
-    -3,  0,  0,  0,  0,  0,  0, -3,
-     0,  0,  0,  3,  3,  0,  0,  0
-]
- 
-QUEEN_MIDDLEGAME_TABLE = [
-   -10, -5, -5, -3, -3, -5, -5,-10,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  3,  3,  3,  3,  0, -5,
-    -3,  0,  3,  3,  3,  3,  0, -3,
-     0,  0,  3,  3,  3,  3,  0, -3,
-    -5,  3,  3,  3,  3,  3,  0, -5,
-    -5, -3, -3, -3, -3, -3, -3, -5, 
-   -10, -8, -8,  5,  5, -8, -8,-10  
-]
- 
-QUEEN_ENDGAME_TABLE = [
-   -10, -5, -5, -3, -3, -5, -5,-10,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  3,  3,  3,  3,  0, -5,
-    -3,  0,  3,  3,  3,  3,  0, -3,
-     0,  0,  3,  3,  3,  3,  0, -3,
-    -5,  3,  3,  3,  3,  3,  0, -5,
-    -5,  0,  3,  0,  0,  0,  0, -5,
-   -10, -5, -5, -3, -3, -5, -5,-10
-]
- 
-KING_MIDDLEGAME_TABLE = [
-   -15,-20,-20,-25,-25,-20,-20,-15,
-   -15,-20,-20,-25,-25,-20,-20,-15,
-   -15,-20,-20,-25,-25,-20,-20,-15,
-   -15,-20,-20,-25,-25,-20,-20,-15,
-   -10,-15,-15,-20,-20,-15,-15,-10,
-    -5,-10,-10,-10,-10,-10,-10, -5,
-    10, 10,  0,  0,  0,  0, 10, 10,
-    10, 15,  5,  0,  0,  5, 15, 10
-]
- 
-KING_ENDGAME_TABLE = [
-   -25,-20,-15,-10,-10,-15,-20,-25,
-   -15,-10, -5,  0,  0, -5,-10,-15,
-   -15, -5, 10, 15, 15, 10, -5,-15,
-   -15, -5, 15, 20, 20, 15, -5,-15,
-   -15, -5, 15, 20, 20, 15, -5,-15,
-   -15, -5, 10, 15, 15, 10, -5,-15,
-   -15,-15,  0,  0,  0,  0,-15,-15,
-   -25,-15,-15,-15,-15,-15,-15,-25
+   -50,-40,-30,-30,-30,-30,-40,-50,
+   -40,-20,  0,  0,  0,  0,-20,-40,
+   -30,  0, 20, 15, 15, 20,  0,-30,
+   -30,  5, 15, 15, 15, 15,  5,-30,
+   -30,  0, 15, 15, 15, 15,  0,-30,
+   -30,  5, 20, 15, 15, 20,  5,-30,
+   -40,-20,  0,  5,  5,  0,-20,-40,
+   -50,-40,-30,-30,-30,-30,-40,-50
 ]
 
+BISHOP_TABLE = [
+   -20,-10,-10,-10,-10,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5, 10, 10,  5,  0,-10,
+   -10,  5,  5, 10, 10,  5,  5,-10,
+   -10,  0, 10, 10, 10, 10,  0,-10,
+   -10, 10, 10, 10, 10, 10, 10,-10,
+   -10,  5,  0,  0,  0,  0,  5,-10,
+   -20,-10,-10,-10,-10,-10,-10,-20
+]
+
+ROOK_TABLE = [
+     0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0
+]
+
+QUEEN_MIDDLEGAME_TABLE = [
+   -20,-10,-10, -5, -5,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+     0,  0,  5,  5,  5,  5,  0, -5,
+   -10,  5,  5,  5,  5,  5,  0,-10,
+   -10, -5, -5, -5, -5, -5, -5,-10, 
+   -20,-15,-15, 10, 10,-15,-15,-20  
+]
+
+QUEEN_ENDGAME_TABLE = [
+   -20,-10,-10, -5, -5,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+     0,  0,  5,  5,  5,  5,  0, -5,
+   -10,  5,  5,  5,  5,  5,  0,-10,
+   -10,  0,  5,  0,  0,  0,  0,-10,
+   -20,-10,-10, -5, -5,-10,-10,-20
+]
+
+KING_MIDDLEGAME_TABLE = [
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30,
+   -20,-30,-30,-40,-40,-30,-30,-20,
+   -10,-20,-20,-20,-20,-20,-20,-10,
+    20, 20,  0,  0,  0,  0, 20, 20,
+    20, 30, 10,  0,  0, 10, 30, 20
+]
+
+KING_ENDGAME_TABLE = [
+   -50,-40,-30,-20,-20,-30,-40,-50,
+   -30,-20,-10,  0,  0,-10,-20,-30,
+   -30,-10, 20, 30, 30, 20,-10,-30,
+   -30,-10, 30, 40, 40, 30,-10,-30,
+   -30,-10, 30, 40, 40, 30,-10,-30,
+   -30,-10, 20, 30, 30, 20,-10,-30,
+   -30,-30,  0,  0,  0,  0,-30,-30,
+   -50,-30,-30,-30,-30,-30,-30,-50
+]
+
+BISHOP_PAIR_BONUS = 30
+ROOK_OPEN_FILE_BONUS = 20
+ROOK_SEMI_OPEN_FILE_BONUS = 10
+
 def safe_flush():
-    """Flushes stdout safely to prevent BrokenPipeError crashes when GUI closes."""
     try:
         sys.stdout.flush()
     except (BrokenPipeError, IOError):
@@ -262,27 +206,23 @@ def evaluate_king_safety(board: chess.Board, king_sq: int, color: chess.Color) -
             sq = chess.square(f, shield_rank)
             piece = board.piece_at(sq)
             if piece and piece.piece_type == chess.PAWN and piece.color == color:
-                safety_score += 8
+                safety_score += 15
             else:
-                safety_score -= 10
+                safety_score -= 20
 
     pawns_on_file = sum(
         1 for r in range(8)
         if (p := board.piece_at(chess.square(file_idx, r))) and p.piece_type == chess.PAWN
     )
     if pawns_on_file == 0:
-        safety_score -= 18
+        safety_score -= 35
     elif not any(
         (p := board.piece_at(chess.square(file_idx, r))) and p.piece_type == chess.PAWN and p.color == color
         for r in range(8)
     ):
-        safety_score -= 10
+        safety_score -= 20
 
     return safety_score
-
-BISHOP_PAIR_BONUS = 15
-ROOK_OPEN_FILE_BONUS = 10
-ROOK_SEMI_OPEN_FILE_BONUS = 5
 
 def evaluate_rook_files(board: chess.Board) -> int:
     score = 0
@@ -329,17 +269,23 @@ def get_pst_value(piece_type: int, square: int, color: chess.Color, in_endgame: 
     sq = square if color == chess.WHITE else chess.square_mirror(square)
     return table[sq]
 
-def evaluate_repetition(board: chess.Board) -> int:
-    if board.is_repetition(2):
-        material = 0
-        for piece in board.piece_map().values():
-            value = PIECE_VALUES[piece.piece_type]
-            material += value if piece.color == chess.WHITE else -value
+def evaluate_hanging_pieces(board: chess.Board) -> int:
+    score = 0
+    for square, piece in board.piece_map().items():
+        if piece.piece_type == chess.KING:
+            continue
 
-        if material > 300 or material < -300:
-            return -150
+        attackers = len(board.attackers(not piece.color, square))
+        defenders = len(board.attackers(piece.color, square))
 
-    return 0
+        if attackers > defenders:
+            loss = PIECE_VALUES[piece.piece_type] // 3
+            if piece.color == chess.WHITE:
+                score -= loss
+            else:
+                score += loss
+
+    return score
 
 def evaluate_board(board: chess.Board, ply: int = 0) -> int:
     if board.is_checkmate():
@@ -349,37 +295,29 @@ def evaluate_board(board: chess.Board, ply: int = 0) -> int:
 
     score = 0
     in_endgame = is_endgame(board)
+
+    score += evaluate_hanging_pieces(board)
+
     material_balance = 0
-
     for square, piece in board.piece_map().items():
-        piece_value = PIECE_VALUES[piece.piece_type]
-        is_white = piece.color == chess.WHITE
-
-        val = piece_value + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
-        score += val if is_white else -val
-
-        material_balance += piece_value if is_white else -piece_value
-
-        if piece.piece_type != chess.KING:
-            attackers = len(board.attackers(not piece.color, square))
-            defenders = len(board.attackers(piece.color, square))
-            if attackers > defenders:
-                loss = piece_value // 6
-                score += -loss if is_white else loss
+        val = PIECE_VALUES[piece.piece_type] + get_pst_value(
+            piece.piece_type, square, piece.color, in_endgame
+        )
+        score += val if piece.color == chess.WHITE else -val
+        material_balance += PIECE_VALUES[piece.piece_type] if piece.color == chess.WHITE else -PIECE_VALUES[piece.piece_type]
 
     if material_balance > 300:
         black_piece_material = sum(
             PIECE_VALUES[pt] * len(board.pieces(pt, chess.BLACK))
             for pt in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)
         )
-        score += (STARTING_PIECE_MATERIAL - black_piece_material) // 100
-
+        score += (STARTING_PIECE_MATERIAL - black_piece_material) // 50
     elif material_balance < -300:
         white_piece_material = sum(
             PIECE_VALUES[pt] * len(board.pieces(pt, chess.WHITE))
             for pt in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)
         )
-        score -= (STARTING_PIECE_MATERIAL - white_piece_material) // 100
+        score -= (STARTING_PIECE_MATERIAL - white_piece_material) // 50
 
     score += evaluate_pawn_structure(board, in_endgame)
 
@@ -397,430 +335,65 @@ def evaluate_board(board: chess.Board, ply: int = 0) -> int:
         if white_king_sq is not None and black_king_sq is not None:
             w_safety = evaluate_king_safety(board, white_king_sq, chess.WHITE)
             b_safety = evaluate_king_safety(board, black_king_sq, chess.BLACK)
-
             score += w_safety
             score -= b_safety
 
     return score if board.turn == chess.WHITE else -score
-
-def _store_killer(depth: int, move: chess.Move) -> None:
-    if move.promotion is not None:
-        return
-    killers = killer_moves.setdefault(depth, [None, None])
-    if move != killers[0]:
-        killers[1] = killers[0]
-        killers[0] = move
-
-def score_move(board: chess.Board, move: chess.Move, tt_move: chess.Move = None,
-                killers: list = None) -> int:
-    if tt_move is not None and move == tt_move:
-        return 1_000_000
-
-    if board.is_capture(move):
-        victim = board.piece_at(move.to_square)
-        attacker = board.piece_at(move.from_square)
-        victim_val = PIECE_VALUES[victim.piece_type] if victim else 100
-        attacker_val = PIECE_VALUES[attacker.piece_type] if attacker else 100
-        bonus = victim_val - attacker_val
-
-        if victim_val >= 300:
-            bonus += 150
-
-        return 1000 + bonus
-
-    if move.promotion:
-        return 900
-
-    if killers:
-        if move == killers[0]:
-            return 600
-        if move == killers[1]:
-            return 550
-
-    # History Heuristic Score
-    hist_score = history_table.get((move.from_square, move.to_square), 0)
-    if hist_score > 0:
-        return min(500, hist_score)
-
-    to_sq = move.to_square
-    if to_sq in [chess.E4, chess.D4, chess.E5, chess.D5]:
-        return 100
-    if to_sq in [chess.F3, chess.C3, chess.F6, chess.C6]:
-        return 50
-
-    return 0
-
-def order_moves(board: chess.Board, tt_move: chess.Move = None, depth: int = None) -> list:
-    moves = list(board.legal_moves)
-    killers = killer_moves.get(depth) if depth is not None else None
-    moves.sort(key=lambda m: score_move(board, m, tt_move, killers), reverse=True)
-    return moves
 
 def quiescence_search(board: chess.Board, alpha: int, beta: int, ply: int = 0) -> int:
     stand_pat = evaluate_board(board, ply)
 
     if stand_pat >= beta:
         return beta
-
     if stand_pat > alpha:
         alpha = stand_pat
 
-    def _capture_gain(move: chess.Move) -> int:
-        if move.promotion:
-            return PIECE_VALUES[move.promotion]
-        victim = board.piece_at(move.to_square)
-        return PIECE_VALUES[victim.piece_type] if victim else 100
+    for move in board.legal_moves:
+        if board.is_capture(move) or move.promotion:
+            board.push(move)
+            score = -quiescence_search(board, -beta, -alpha, ply + 1)
+            board.pop()
 
-    capture_moves = [
-        move for move in board.legal_moves
-        if board.is_capture(move) or move.promotion
-    ]
-    capture_moves.sort(key=_capture_gain, reverse=True)
-
-    DELTA_MARGIN = 200
-
-    for move in capture_moves:
-        gain = _capture_gain(move)
-
-        if stand_pat + gain + DELTA_MARGIN < alpha:
-            break
-
-        board.push(move)
-        score = -quiescence_search(board, -beta, -alpha, ply + 1)
-        board.pop()
-
-        if score >= beta:
-            return beta
-
-        if score > alpha:
-            alpha = score
+            if score >= beta:
+                return beta
+            if score > alpha:
+                alpha = score
 
     return alpha
 
-def _has_non_pawn_material(board: chess.Board, color: chess.Color) -> bool:
-    return bool(
-        len(board.pieces(chess.KNIGHT, color))
-        or len(board.pieces(chess.BISHOP, color))
-        or len(board.pieces(chess.ROOK, color))
-        or len(board.pieces(chess.QUEEN, color))
-    )
-
-def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0, allow_null: bool = True) -> int:
+def negamax(board: chess.Board, depth: int, alpha: int, beta: int, ply: int = 0) -> int:
     if board.is_repetition(2):
-        eval_score = evaluate_board(board, ply)
-        if eval_score > 150:
-            return -200
-        if eval_score < -150:
-            return 200
         return 0
 
     if board.is_game_over():
         return evaluate_board(board, ply)
 
-    original_alpha = alpha
-    original_beta = beta
-
-    key = _position_key(board)
-    tt_entry = transposition_table.get(key)
-    tt_move = None
-
-    if tt_entry is not None:
-        tt_depth, tt_score, tt_flag, tt_move = tt_entry
-        if tt_depth >= depth:
-            if tt_flag == TT_EXACT:
-                return tt_score
-            elif tt_flag == TT_LOWERBOUND and tt_score > alpha:
-                alpha = tt_score
-            elif tt_flag == TT_UPPERBOUND and tt_score < beta:
-                beta = tt_score
-
-            if alpha >= beta:
-                return tt_score
-
     if depth == 0:
-        score = quiescence_search(board, alpha, beta, ply)
-
-        if score <= original_alpha:
-            flag = TT_UPPERBOUND
-        elif score >= original_beta:
-            flag = TT_LOWERBOUND
-        else:
-            flag = TT_EXACT
-
-        _tt_store(key, depth, score, flag, None)
-        return score
-
-    # Null Move Pruning
-    if (
-        allow_null
-        and depth >= NULL_MOVE_MIN_DEPTH
-        and not board.is_check()
-        and abs(beta) < MATE_SCORE_THRESHOLD
-        and _has_non_pawn_material(board, board.turn)
-    ):
-        board.push(chess.Move.null())
-        null_score = -negamax(
-            board,
-            depth - 1 - NULL_MOVE_REDUCTION,
-            -beta,
-            -beta + 1,
-            ply + 1,
-            allow_null=False,
-        )
-        board.pop()
-
-        if null_score >= beta:
-            return beta
+        return quiescence_search(board, alpha, beta, ply)
 
     max_score = -float('inf')
-    best_move_here = None
-    moves = order_moves(board, tt_move, depth)
 
-    in_check = board.is_check()
-
-    for move_count, move in enumerate(moves):
-        is_capture = board.is_capture(move)
+    for move in board.legal_moves:
         board.push(move)
-
-        # --- LATE MOVE REDUCTIONS (LMR) ---
-        if (
-            move_count >= 3
-            and depth >= 3
-            and not is_capture
-            and not in_check
-            and not move.promotion
-            and not board.is_check()  # didn't give check
-        ):
-            # Search late quiet move at reduced depth
-            reduction = 2 if move_count >= 6 else 1
-            reduced_depth = max(1, depth - 1 - reduction)
-            
-            score = -negamax(board, reduced_depth, -alpha - 1, -alpha, ply + 1)
-
-            # If reduced search raised alpha, re-search at full depth
-            if score > alpha and reduced_depth < depth - 1:
-                score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
-        else:
-            # Full Depth Search
-            score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
-
+        score = -negamax(board, depth - 1, -beta, -alpha, ply + 1)
         board.pop()
 
         if score > max_score:
             max_score = score
-            best_move_here = move
         if score > alpha:
             alpha = score
         if alpha >= beta:
-            if not is_capture:
-                _store_killer(depth, move)
-                # Update History Heuristic
-                hist_key = (move.from_square, move.to_square)
-                history_table[hist_key] = history_table.get(hist_key, 0) + depth * depth
             break
-
-    if max_score <= original_alpha:
-        flag = TT_UPPERBOUND
-    elif max_score >= original_beta:
-        flag = TT_LOWERBOUND
-    else:
-        flag = TT_EXACT
-
-    _tt_store(key, depth, max_score, flag, best_move_here)
 
     return max_score
 
-def _position_key(board: chess.Board):
-    try:
-        return board._transposition_key()
-    except AttributeError:
-        return chess.polyglot.zobrist_hash(board)
-
-def _tt_store(key: int, depth: int, score: int, flag: int, move) -> None:
-    if len(transposition_table) > MAX_TT_ENTRIES:
-        transposition_table.clear()
-        
-    existing = transposition_table.get(key)
-    if existing is None or depth >= existing[0]:
-        transposition_table[key] = (depth, score, flag, move)
-
-def search_at_depth(board: chess.Board, depth: int, alpha: float = -float('inf'),
-                     beta: float = float('inf')):
+def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
     best_move = None
     best_score = -float('inf')
-
-    key = _position_key(board)
-    tt_entry = transposition_table.get(key)
-    tt_move = tt_entry[3] if tt_entry is not None else None
-
-    for move in order_moves(board, tt_move, depth):
-        board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha, 1)
-        board.pop()
-
-        if score > best_score:
-            best_score = score
-            best_move = move
-
-        if score > alpha:
-            alpha = score
-
-    if best_move is not None:
-        _tt_store(key, depth, best_score, TT_EXACT, best_move)
-
-    return best_move, best_score
-
-def extract_pv(board: chess.Board, max_length: int) -> list:
-    pv = []
-    b = board.copy(stack=False)
-
-    for _ in range(max_length):
-        key = _position_key(b)
-        entry = transposition_table.get(key)
-        if entry is None or entry[3] is None:
-            break
-
-        move = entry[3]
-        if move not in b.legal_moves:
-            break
-
-        pv.append(move)
-        b.push(move)
-
-    return pv
-
-def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
-    board_fen_position = board.fen().split(" ")[0]
-
-    if board_fen_position in OPENING_BOOK:
-        book_move = chess.Move.from_uci(OPENING_BOOK[board_fen_position])
-        try:
-            print(f"info depth 0 score cp 0 pv {book_move.uci()} string book move")
-            safe_flush()
-        except Exception:
-            pass
-        return book_move
-
-    killer_moves.clear()
-
-    best_move = None
-    prev_score = None
-    ASPIRATION_WINDOW = 50
+    
+    alpha = -float('inf')
+    beta = float('inf')
 
     for depth in range(1, max_depth + 1):
-        if prev_score is None:
-            alpha, beta = -float('inf'), float('inf')
-        else:
-            alpha = prev_score - ASPIRATION_WINDOW
-            beta = prev_score + ASPIRATION_WINDOW
-
-        move, score = search_at_depth(board, depth, alpha, beta)
-
-        if score <= alpha or score >= beta:
-            root_key = _position_key(board)
-            if root_key in transposition_table:
-                del transposition_table[root_key]
-            move, score = search_at_depth(board, depth, -float('inf'), float('inf'))
-
-        if move:
-            best_move = move
-
-        prev_score = score if abs(score) < MATE_SCORE_THRESHOLD else None
-
-        pv_moves = extract_pv(board, depth)
-        if not pv_moves and best_move is not None:
-            pv_moves = [best_move]
-        pv_str = " ".join(m.uci() for m in pv_moves)
-
-        try:
-            if abs(score) >= MATE_SCORE_THRESHOLD:
-                mate_in = max(1, (MATE_VALUE - abs(score) + 1) // 2)
-                mate_score = mate_in if score > 0 else -mate_in
-                print(f"info depth {depth} score mate {mate_score} pv {pv_str}")
-            else:
-                print(f"info depth {depth} score cp {int(score)} pv {pv_str}")
-            safe_flush()
-        except Exception:
-            pass
-
-    return best_move if best_move else list(board.legal_moves)[0]
-
-def uci_loop():
-    board = chess.Board()
-    options = {"Depth": DEFAULT_MAX_DEPTH}
-
-    while True:
-        try:
-            line = sys.stdin.readline()
-        except (KeyboardInterrupt, SystemExit):
-            break
-        if not line:
-            break
-
-        line = line.strip()
-        if line == "uci":
-            print("id name Zugzwang v0.3")
-            print("id author Zugzwang contributors")
-            print(f"option name Depth type spin default {DEFAULT_MAX_DEPTH} min 1 max {MAX_ALLOWED_DEPTH}")
-            print("uciok")
-            safe_flush()
-        elif line == "isready":
-            print("readyok")
-            safe_flush()
-
-        elif line == "ucinewgame":
-            board = chess.Board()
-            transposition_table.clear()
-            killer_moves.clear()
-            history_table.clear()
-
-        elif line.startswith("setoption"):
-            tokens = line.split()
-            if "name" in tokens:
-                name_idx = tokens.index("name") + 1
-                if "value" in tokens:
-                    value_idx = tokens.index("value")
-                    opt_name = " ".join(tokens[name_idx:value_idx])
-                    opt_value = " ".join(tokens[value_idx + 1:])
-                else:
-                    opt_name = " ".join(tokens[name_idx:])
-                    opt_value = None
-
-                if opt_name.strip().lower() == "depth" and opt_value is not None:
-                    try:
-                        requested = int(opt_value)
-                        options["Depth"] = max(1, min(MAX_ALLOWED_DEPTH, requested))
-                    except ValueError:
-                        pass
-
-        elif line.startswith("position"):
-            tokens = line.split()
-            if "startpos" in tokens:
-                board = chess.Board()
-                if "moves" in tokens:
-                    move_idx = tokens.index("moves") + 1
-                    for move_str in tokens[move_idx:]:
-                        board.push_uci(move_str)
-            elif "fen" in tokens:
-                fen_idx = tokens.index("fen")
-                fen_parts = []
-                for token in tokens[fen_idx + 1:]:
-                    if token == "moves":
-                        break
-                    fen_parts.append(token)
-                board = chess.Board(" ".join(fen_parts))
-                if "moves" in tokens:
-                    move_idx = tokens.index("moves") + 1
-                    for move_str in tokens[move_idx:]:
-                        board.push_uci(move_str)
-
-        elif line.startswith("go"):
-            best_move = get_best_move(board, max_depth=options["Depth"])
-            print(f"bestmove {best_move.uci()}")
-            safe_flush()
-
-        elif line == "quit":
-            break
-
-if __name__ == "__main__":
-    uci_loop()
+        best_move_this_depth = None
+        best_score_this_depth = -float('inf')
