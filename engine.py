@@ -355,6 +355,19 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
 
 def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
     """Negamax search algorithm with Alpha-Beta pruning and move ordering."""
+
+    # Discourage unnecessary repetitions when ahead
+    if board.is_repetition(2):
+        eval_score = evaluate_board(board)
+
+        if eval_score > 150:
+            return -200
+
+        if eval_score < -150:
+            return 200
+
+        return 0
+
     if board.is_game_over():
         return evaluate_board(board)
 
