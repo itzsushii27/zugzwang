@@ -391,7 +391,14 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
         # Only search forcing moves
         if not (
             board.is_capture(move)
-            or board.gives_check(move)
+            or (
+                board.gives_check(move)
+                and (
+                    board.piece_at(move.from_square) is None
+                    or PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[chess.KNIGHT]
+                    or not board.is_attacked_by(not board.turn, move.to_square)
+                )
+            )
             or move.promotion
         ):
             continue
