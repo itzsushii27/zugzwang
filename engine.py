@@ -145,6 +145,144 @@ OPENING_BOOK = {
 
     # vs 1. Nf3 (Reti)
     "rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R": "g8f6",
+
+    # ================================================================
+    # 5. SPANISH / RUY LOPEZ
+    # ================================================================
+
+    # 1 e4 e5 2 Nf3 Nc6 3 Bb5
+    "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "f1b5",
+
+    # Spanish: 3...a6
+    "r1bqkbnr/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "a7a6",
+
+    # Spanish: 4 Ba4
+    "r1bqkbnr/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R": "b5a4",
+
+    # Spanish: 4...Nf6
+    "r1bqkb1r/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R": "g8f6",
+
+    # Spanish: 5 O-O
+    "r1bqkb1r/1ppp1ppp/p1n5/4p3/4P3/5N2/PPPP1PPP/RNBQ1RK1": "e1g1",
+
+    # Spanish: Berlin
+    "r1bqk2r/1ppp1ppp/p1n2n2/4p3/4P3/5N2/PPPP1PPP/RNBQ1RK1": "f1b5",
+
+    # Spanish closed
+    "r1bq1rk1/1ppp1ppp/p1n2n2/4p3/4P3/5N2/PPPP1PPP/RNBQ1RK1": "c2c3",
+
+
+    # ================================================================
+    # 6. SCOTCH GAME
+    # ================================================================
+
+    # 1 e4 e5 2 Nf3 Nc6 3 d4
+    "r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R": "d2d4",
+
+    # Scotch accepted
+    "r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R": "e4d5",
+
+    # Scotch main line
+    "r1bqkbnr/pppp1ppp/2n5/3p4/4P3/5N2/PPP2PPP/RNBQKB1R": "f1c4",
+
+    # Scotch 4...Bc5
+    "r1bqk1nr/pppp1ppp/2n5/2b5/2B1P3/5N2/PPPP1PPP/RNBQK2R": "f8c5",
+
+
+    # ================================================================
+    # 7. VIENNA GAME
+    # ================================================================
+
+    # 1 e4 e5 2 Nc3
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR": "b8c6",
+
+    # Vienna 3 f4
+    "r1bqkbnr/pppp1ppp/2n5/4p3/4PP2/2N5/PPPP2PP/R1BQKBNR": "e5f4",
+
+    # Vienna gambit accepted
+    "r1bqkbnr/pppp1ppp/2n5/8/4Pp2/2N5/PPPP2PP/R1BQKBNR": "g1f3",
+
+
+    # ================================================================
+    # 8. KING'S GAMBIT
+    # ================================================================
+
+    # 1 e4 e5 2 f4
+    "rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR": "f2f4",
+
+    # accepted
+    "rnbqkbnr/pppp1ppp/8/8/4pp2/8/PPPP2PP/RNBQKBNR": "g1f3",
+
+    # declined
+    "rnbqkbnr/pppp1ppp/8/3p4/4PP2/8/PPPP2PP/RNBQKBNR": "g1f3",
+
+
+    # ================================================================
+    # 9. SICILIAN DEFENSE
+    # ================================================================
+
+    # 1 e4 c5 2 Nf3
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",
+
+    # Sicilian open
+    "rnbqkbnr/pp1ppppp/8/8/3pP3/5N2/PPPP1PPP/RNBQKB1R": "f3d4",
+
+    # Sicilian 2...Nc6
+    "r1bqkbnr/pp1ppppp/2n5/8/3NP3/8/PPPP1PPP/RNBQKB1R": "d2d4",
+
+    # Sicilian Dragon setup
+    "r1bqkbnr/pp1ppp1p/2np2p1/8/3NP3/8/PPPP1PPP/RNBQKB1R": "d2d4",
+
+    # Sicilian Najdorf
+    "rnbqkb1r/1p1ppppp/p1p5/8/3NP3/8/PPPP1PPP/RNBQKB1R": "d2d4",
+
+    # Sicilian Classical
+    "r1bqkb1r/pp1ppppp/2n2n2/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",
+
+    # Sicilian Alapin
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/2P5/PP1P1PPP/RNBQKBNR": "d7d5",
+
+
+    # ================================================================
+    # 10. FRENCH DEFENSE
+    # ================================================================
+
+    # 1 e4 e6
+    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
+
+    # French advance
+    "rnbqkbnr/pppp1ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR": "e4e5",
+
+    # French exchange
+    "rnbqkbnr/pppp1ppp/4p3/3P4/8/8/PPPP1PPP/RNBQKBNR": "e6d5",
+
+    # French Tarrasch
+    "rnbqkbnr/pppp1ppp/4p3/8/3PP3/5N2/PPP2PPP/RNBQKB1R": "d7d5",
+
+
+    # ================================================================
+    # 11. CARO-KANN
+    # ================================================================
+
+    # 1 e4 c6 2 d4
+    "rnbqkbnr/pp1ppppp/2p5/8/3PP3/8/PPP2PPP/RNBQKBNR": "d7d5",
+
+    # Caro advance
+    "rnbqkbnr/pp2pppp/2p5/3p4/3PP3/8/PPP2PPP/RNBQKBNR": "e4e5",
+
+    # Caro classical
+    "rnbqkbnr/pp2pppp/2p5/3pp3/4P3/8/PPPP1PPP/RNBQKBNR": "b1c3",
+
+
+    # ================================================================
+    # 12. PIRC / MODERN
+    # ================================================================
+
+    "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
+
+    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",
+
+})
 }
 
 # Piece-Square Tables (White's perspective)
