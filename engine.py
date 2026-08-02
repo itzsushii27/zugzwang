@@ -44,10 +44,10 @@ PAWN_TABLE = [
 KNIGHT_TABLE = [
    -50,-40,-30,-30,-30,-30,-40,-50,
    -40,-20,  0,  0,  0,  0,-20,-40,
-   -30,  0, 10, 15, 15, 10,  0,-30,
-   -30,  5, 15, 20, 20, 15,  5,-30,
-   -30,  0, 15, 20, 20, 15,  0,-30,
-   -30,  5, 10, 15, 15, 10,  5,-30,
+   -30,  0, 20, 15, 15, 20,  0,-30,
+   -30,  5, 15, 15, 15, 15,  5,-30,
+   -30,  0, 15, 15, 15, 15,  0,-30,
+   -30,  5, 20, 15, 15, 20,  5,-30,
    -40,-20,  0,  5,  5,  0,-20,-40,
    -50,-40,-30,-30,-30,-30,-40,-50
 ]
@@ -245,12 +245,11 @@ def evaluate_board(board: chess.Board) -> int:
 
     score = 0
     in_endgame = is_endgame(board)
-    turn = board.turn
 
-    # 1. Material + Piece-Square Tables
+    # 1. Material + Piece-Square Tables (White is positive, Black is negative)
     for square, piece in board.piece_map().items():
         val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
-        score += val if piece.color == turn else -val
+        score += val if piece.color == chess.WHITE else -val
 
     # 2. Piece Mobility
     score += get_mobility_score(board)
@@ -258,7 +257,7 @@ def evaluate_board(board: chess.Board) -> int:
     # 3. Pawn Structure
     score += evaluate_pawn_structure(board, in_endgame)
 
-    # 4. King Safety
+    # 4. King Safety (White adds safety, Black subtracts safety)
     if not in_endgame:
         white_king_sq = board.king(chess.WHITE)
         black_king_sq = board.king(chess.BLACK)
@@ -267,10 +266,12 @@ def evaluate_board(board: chess.Board) -> int:
             w_safety = evaluate_king_safety(board, white_king_sq, chess.WHITE)
             b_safety = evaluate_king_safety(board, black_king_sq, chess.BLACK)
             
-            score += w_safety if turn == chess.WHITE else -w_safety
-            score -= b_safety if turn == chess.WHITE else -b_safety
+            score += w_safety
+            score -= b_safety
 
-    return score
+    # FINAL PERSPECTIVE FLIP: Return positive score for whichever player is thinking
+    return score if board.turn == chess.WHITE else -score
+
 
 def score_move(board: chess.Board, move: chess.Move) -> int:
     """Assigns priority scores to moves for faster Alpha-Beta pruning."""
