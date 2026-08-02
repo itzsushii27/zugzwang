@@ -248,6 +248,27 @@ def get_mobility_score(board: chess.Board) -> int:
 
     return mobility_score
 
+def evaluate_repetition(board: chess.Board) -> int:
+    """Penalizes unnecessary repetitions when ahead."""
+    
+    # Only care if the position has actually repeated
+    if board.is_repetition(2):
+        material = 0
+
+        for piece in board.piece_map().values():
+            value = PIECE_VALUES[piece.piece_type]
+            material += value if piece.color == chess.WHITE else -value
+
+        # White is ahead
+        if material > 300:
+            return -150
+
+        # Black is ahead
+        elif material < -300:
+            return -150
+
+    return 0
+
 def evaluate_board(board: chess.Board) -> int:
     """Complete evaluation using Material, PSTs, Mobility, Pawn Structure, and King Safety."""
     if board.is_checkmate():
