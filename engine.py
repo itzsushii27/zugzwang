@@ -260,22 +260,28 @@ def evaluate_board(board: chess.Board) -> int:
 
     # 1. Material + Piece-Square Tables (White is positive, Black is negative)
     for square, piece in board.piece_map().items():
-        val = PIECE_VALUES[piece.piece_type] + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
+        val = PIECE_VALUES[piece.piece_type] + get_pst_value(
+            piece.piece_type,
+            square,
+            piece.color,
+            in_endgame
+        )
         score += val if piece.color == chess.WHITE else -val
+
     # Encourage simplification when ahead
-material_balance = 0
+    material_balance = 0
 
-for piece in board.piece_map().values():
-    value = PIECE_VALUES[piece.piece_type]
-    material_balance += value if piece.color == chess.WHITE else -value
+    for piece in board.piece_map().values():
+        value = PIECE_VALUES[piece.piece_type]
+        material_balance += value if piece.color == chess.WHITE else -value
 
-if material_balance > 300:
-    # White is ahead: reward fewer enemy pieces
-    score += (16 - len(board.pieces(chess.PAWN, chess.BLACK))) * 5
+    if material_balance > 300:
+        # White is ahead: encourage reducing black material
+        score += (16 - len(board.pieces(chess.PAWN, chess.BLACK))) * 5
 
-elif material_balance < -300:
-    # Black is ahead: reward fewer white pieces
-    score -= (16 - len(board.pieces(chess.PAWN, chess.WHITE))) * 5
+    elif material_balance < -300:
+        # Black is ahead: encourage reducing white material
+        score -= (16 - len(board.pieces(chess.PAWN, chess.WHITE))) * 5
 
     # 2. Piece Mobility
     score += get_mobility_score(board)
@@ -291,11 +297,11 @@ elif material_balance < -300:
         if white_king_sq is not None and black_king_sq is not None:
             w_safety = evaluate_king_safety(board, white_king_sq, chess.WHITE)
             b_safety = evaluate_king_safety(board, black_king_sq, chess.BLACK)
-            
+
             score += w_safety
             score -= b_safety
 
-    # FINAL PERSPECTIVE FLIP: Return positive score for whichever player is thinking
+    # FINAL PERSPECTIVE FLIP
     return score if board.turn == chess.WHITE else -score
 
 
