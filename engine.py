@@ -292,7 +292,14 @@ def score_move(board: chess.Board, move: chess.Move) -> int:
         attacker = board.piece_at(move.from_square)
         victim_val = PIECE_VALUES[victim.piece_type] if victim else 100
         attacker_val = PIECE_VALUES[attacker.piece_type] if attacker else 100
-        return 1000 + (victim_val - attacker_val)
+        bonus = victim_val - attacker_val
+
+        eval_now = evaluate_board(board)
+
+        if eval_now > 300 and victim_val >= 300:
+            bonus += 300
+
+        return 1000 + bonus
 
     if board.gives_check(move):
         return 500
