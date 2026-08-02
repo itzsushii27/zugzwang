@@ -312,7 +312,7 @@ def order_moves(board: chess.Board) -> list:
     return moves
 
 def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
-    """Searches captures, checks, and promotions until a stable position is reached."""
+    """Searches forcing moves (captures, checks, promotions) until stable."""
 
     stand_pat = evaluate_board(board)
 
@@ -322,8 +322,10 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
     if stand_pat > alpha:
         alpha = stand_pat
 
+
     for move in board.legal_moves:
 
+        # Only search forcing moves
         if not (
             board.is_capture(move)
             or board.gives_check(move)
@@ -341,11 +343,13 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
 
         board.pop()
 
+
         if score >= beta:
             return beta
 
         if score > alpha:
             alpha = score
+
 
     return alpha
 
