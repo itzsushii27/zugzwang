@@ -258,6 +258,21 @@ def evaluate_board(board: chess.Board) -> int:
     score = 0
     in_endgame = is_endgame(board)
 
+    for square, piece in board.piece_map().items():
+    if piece.piece_type == chess.KING:
+        continue
+
+    attackers = len(board.attackers(not piece.color, square))
+    defenders = len(board.attackers(piece.color, square))
+
+    if attackers > defenders:
+        loss = PIECE_VALUES[piece.piece_type] // 3
+
+        if piece.color == chess.WHITE:
+            score -= loss
+        else:
+            score += loss
+
     # 1. Material + Piece-Square Tables (White is positive, Black is negative)
     for square, piece in board.piece_map().items():
         val = PIECE_VALUES[piece.piece_type] + get_pst_value(
