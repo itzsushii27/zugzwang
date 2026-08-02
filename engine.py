@@ -283,8 +283,8 @@ def evaluate_board(board: chess.Board) -> int:
         # Black is ahead: encourage reducing white material
         score -= (16 - len(board.pieces(chess.PAWN, chess.WHITE))) * 5
 
-    # 2. Piece Mobility
-    score += get_mobility_score(board)
+    # 2. Piece Mobility (disabled)
+# score += get_mobility_score(board)
 
     # 3. Pawn Structure
     score += evaluate_pawn_structure(board, in_endgame)
