@@ -74,7 +74,18 @@ ROOK_TABLE = [
      0,  0,  0,  5,  5,  0,  0,  0
 ]
 
-QUEEN_TABLE = [
+QUEEN_MIDDLEGAME_TABLE = [
+   -20,-10,-10, -5, -5,-10,-10,-20,
+   -10,  0,  0,  0,  0,  0,  0,-10,
+   -10,  0,  5,  5,  5,  5,  0,-10,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+     0,  0,  5,  5,  5,  5,  0, -5,
+   -10,  5,  5,  5,  5,  5,  0,-10,
+   -10, -5, -5, -5, -5, -5, -5,-10, 
+   -20,-15,-15, 10, 10,-15,-15,-20  
+]
+
+QUEEN_ENDGAME_TABLE = [
    -20,-10,-10, -5, -5,-10,-10,-20,
    -10,  0,  0,  0,  0,  0,  0,-10,
    -10,  0,  5,  5,  5,  5,  0,-10,
@@ -84,6 +95,7 @@ QUEEN_TABLE = [
    -10,  0,  5,  0,  0,  0,  0,-10,
    -20,-10,-10, -5, -5,-10,-10,-20
 ]
+
 
 KING_MIDDLEGAME_TABLE = [
    -30,-40,-40,-50,-50,-40,-40,-30,
@@ -212,7 +224,7 @@ def get_pst_value(piece_type: int, square: int, color: chess.Color, in_endgame: 
     elif piece_type == chess.ROOK:
         table = ROOK_TABLE
     elif piece_type == chess.QUEEN:
-        table = QUEEN_TABLE
+        table = QUEEN_ENDGAME_TABLE if in_endgame else QUEEN_MIDDLEGAME_TABLE
     elif piece_type == chess.KING:
         table = KING_ENDGAME_TABLE if in_endgame else KING_MIDDLEGAME_TABLE
     else:
