@@ -82,93 +82,69 @@ DEVELOPMENT_SQUARES = {chess.F3, chess.C3, chess.F6, chess.C6}
 # --- Expanded Opening Book for White & Black --------------------------
 OPENING_BOOK = {
     # ==================================================================
-    # 1. STARTING POSITION & FIRST MOVES
+    # 1. FIRST MOVES
     # ==================================================================
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR": "e2e4",  # White: 1. e4
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR": "e7e5",  # Black response to 1. e4 -> 1... e5
-    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR": "g8f6",  # Black response to 1. d4 -> 1... Nf6
-    "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPP1/RNBQKBNR": "e7e5",  # Black response to 1. c4 -> 1... e5 (Reversed Sicilian)
-    "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R": "d7d5",  # Black response to 1. Nf3 -> 1... d5
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR": "e7e5",  # Black vs 1. e4 -> 1... e5
+    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR": "g8f6",  # Black vs 1. d4 -> 1... Nf6
+    "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPP1/RNBQKBNR": "e7e5",  # Black vs 1. c4 -> 1... e5
+    "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R": "d7d5",  # Black vs 1. Nf3 -> 1... d5
 
     # ==================================================================
-    # 2. WHITE'S RESPONSES TO BLACK'S DEFENSES (After 1. e4)
+    # 2. OPEN GAME (1. e4 e5) & ITALIAN SYSTEM
     # ==================================================================
-    # --- Open Game (1... e5) ---
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",  # 2. Nf3
+    # 1. e4 e5 -> 2. Nf3
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",
 
-    # --- Sicilian Defense (1... c5) ---
-    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",  # 2. Nf3
-    "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",  # 2... d6 -> 3. d4
+    # 1. e4 e5 2. Nf3 -> 2... Nc6 (Black replaces Petrov 2... Nf6)
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "b8c6",
 
-    # --- French Defense (1... e6) ---
-    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 2. d4
-    "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR": "b1c3",  # 2... d5 -> 3. Nc3
+    # 1. e4 e5 2. Nf3 Nc6 -> 3. Bc4 (White plays Italian Game)
+    "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "f1c4",
 
-    # --- Caro-Kann Defense (1... c6) ---
-    "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 2. d4
-    "rnbqkbnr/pp2pppp/2p5/3p4/3PP3/8/PPP2PPP/RNBQKBNR": "b1c3",  # 2... d5 -> 3. Nc3
+    # 1. e4 e5 2. Nf3 Nc6 3. Bc4 -> 3... Bc5 (Black Giuoco Piano)
+    "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R": "f8c5",
 
-    # --- Scandinavian Defense (1... d5) ---
-    "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR": "e4d5",  # 2. exd5
+    # Black responses to White's 4th move in Italian Game:
+    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R": "g8f6",  # vs 4. c3 -> 4... Nf6
+    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R": "g8f6",  # vs 4. d3 -> 4... Nf6
+    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1": "g8f6",  # vs 4. O-O -> 4... Nf6
 
-    # --- Modern / Pirc Defense ---
-    "rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 2. d4
-    "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 2. d4
-    "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR": "e4e5",  # Alekhine's -> 2. e5
+    # 1. e4 e5 2. Nf3 Nc6 3. Nc3 Nf6 -> 4. Bc4 (White plays Italian Four Knights)
+    "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R": "f1c4",
 
-    # ==================================================================
-    # 3. PETROV'S DEFENSE (1. e4 e5 2. Nf3 Nf6) - White & Black
-    # ==================================================================
-    # Position after 2... Nf6 (Petrov Defense) -> White plays 3. Nxe5
-    "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "f3e5",
+    # 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 -> 4. d3 (White against Two Knights Defense)
+    "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R": "d2d3",
 
-    # Position after 3. Nxe5 -> Black MUST play 3... d6 (Kick knight before capturing e4)
-    "rnbqkb1r/pppp1ppp/5n2/4N3/4P3/8/PPPP1PPP/RNBQKB1R": "d7d6",
-
-    # Position after 3... d6 -> White retreats 4. Nf3
-    "rnbqkb1r/ppp2ppp/3p1n2/4N3/4P3/8/PPPP1PPP/RNBQKB1R": "e5f3",
-
-    # Position after 4. Nf3 -> Black re-captures 4... Nxe4
-    "rnbqkb1r/ppp2ppp/3p1n2/8/4P3/5N2/PPPP1PPP/RNBQKB1R": "f6e4",
-
-    # Position after 4... Nxe4 -> White expands in the center with 5. d4
-    "rnbqk2r/ppp2ppp/3p4/8/4n3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",
-
-    # Position after 5. d4 -> Black stakes central claim 5... d5
-    "rnbqk2r/ppp2ppp/3p4/8/3Pn3/5N2/PPP2PPP/RNBQKB1R": "d7d5",
-
-    # Position after 5... d5 -> White develops 6. Bd3
-    "rnbqk2r/ppp2ppp/8/3p4/3Pn3/5N2/PPP2PPP/RNBQKB1R": "f1d3",
-
-    # Position after 6. Bd3 -> Black develops 6... Bd6
-    "rnbqk2r/ppp2ppp/3b4/3p4/3Pn3/3B1N2/PPP2PPP/RNBQ1RK1": "e8g8",
-
-    # --- Petrov Steinitz Variation (3. d4) ---
-    # Position after 3. d4 -> Black takes 3... exd4
-    "rnbqkb1r/pppp1ppp/5n2/8/3PP3/5N2/PPP2PPP/RNBQKB1R": "e5d4",
+    # --- Other Open Games (Scotch, Four Knights) ---
+    "r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R": "e5d4",  # Black vs Scotch 3. d4 -> 3... exd4
 
     # ==================================================================
-    # 4. BLACK'S REPERTOIRE (Against 1. e4, 1. d4, 1. c4, 1. Nf3)
+    # 3. WHITE'S RESPONSES TO OTHER BLACK DEFENSES (1. e4)
     # ==================================================================
-    # --- Black vs Ruy Lopez (1. e4 e5 2. Nf3 Nc6 3. Bb5) ---
-    "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "a7a6",  # 3... a6 (Morphy Defense)
-    "r1bqkbnr/1ppp1ppp/p1n5/4p3/4P3/1B3N2/PPPP1PPP/RNBQK2R": "g8f6", # 4. Ba4 -> 4... Nf6
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",  # vs Sicilian 1... c5
+    "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",  # vs Sicilian ...d6 -> 3. d4
+    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # vs French 1... e6
+    "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # vs Caro-Kann 1... c6
+    "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR": "e4d5",  # vs Scandinavian 1... d5
+    "rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # vs Modern 1... g6
+    "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR": "e4e5",  # vs Alekhine 1... Nf6
+    "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # vs Pirc 1... d6
 
-    # --- Black vs Italian Game (1. e4 e5 2. Nf3 Nc6 3. Bc4) ---
-    "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R": "f1c5", # 3... Bc5 or 3... Nf6
+    # ==================================================================
+    # 4. BLACK REPERTOIRE VS 1. d4, 1. c4, 1. Nf3
+    # ==================================================================
+    # vs 1. d4
+    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR": "c2c4",  # White 2. c4
+    "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",  # Black 2... e6 (QGD)
+    "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",  # 1. d4 Nf6 2. c4 e6
+    "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/2N5/PP2PPPP/R1BQKBNR": "f8b4",  # 3. Nc3 -> 3... Bb4 (Nimzo-Indian)
 
-    # --- Black vs Queen's Gambit (1. d4 d5 2. c4) ---
-    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR": "c2c4",        # White: 2. c4
-    "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",        # Black: 2... e6 (QGD)
-    "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR": "g8f6",     # 3. Nc3 -> 3... Nf6
+    # vs 1. c4 (English)
+    "rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPP1/R1BQKBNR": "g8f6",
 
-    # --- Black vs Indian Defenses (1. d4 Nf6 2. c4) ---
-    "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR": "e7e6",        # 2... e6 (Nimzo/QGD setup)
-    "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/2N5/PP2PPPP/R1BQKBNR": "f8b4",     # 3. Nc3 -> 3... Bb4 (Nimzo-Indian)
-
-    # --- Black vs English Opening (1. c4 e5 2. Nc3) ---
-    "rnbqkbnr/pppp1ppp/8/4p3/2P5/8/PP1PPPP1/RNBQKBNR": "b1c3",        # White 2. Nc3
-    "rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPP1/R1BQKBNR": "g8f6",     # Black 2... Nf6
+    # vs 1. Nf3 (Reti)
+    "rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R": "g8f6",
 }
 
 # Piece-Square Tables (White's perspective)
