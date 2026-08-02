@@ -34,6 +34,17 @@ MAX_ALLOWED_DEPTH = 20
 # depth - it's not an exact mate count, just a much less misleading one.
 MATE_SCORE_THRESHOLD = 90000
  
+# Null-move pruning: "if I let my opponent move twice in a row and I'm
+# still winning by a mile, my actual move here doesn't need searching
+# deeply." R is how much shallower the verification search goes; only
+# attempted from at least this much remaining depth so there's still
+# something meaningful left after the reduction.
+# INVARIANT: NULL_MOVE_MIN_DEPTH - 1 - NULL_MOVE_REDUCTION must be >= 0,
+# or the reduced-depth search below could recurse with negative depth
+# (negamax only special-cases depth == 0, not negative).
+NULL_MOVE_MIN_DEPTH = 3
+NULL_MOVE_REDUCTION = 2
+ 
 # Base piece values in centipawns
 PIECE_VALUES = {
     chess.PAWN: 100,
@@ -63,11 +74,36 @@ DOUBLED_PAWN_PENALTY_EG = 30
 ISOLATED_PAWN_PENALTY_MG = 20
 ISOLATED_PAWN_PENALTY_EG = 40
  
-# Mini Opening Book for instant responses in the opening
+# Mini Opening Book for instant responses in the opening.
+# FEN strings below were generated programmatically (by simulating the
+# actual moves) rather than typed from memory, to guarantee they're
+# exact - a single wrong character silently makes an entry dead weight
+# (it would just never match).
 OPENING_BOOK = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR": "e2e4",  # Start pos -> 1. e4
     "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR": "e7e5",  # 1. e4 -> 1... e5
     "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR": "g8f6",  # 1. d4 -> 1... Nf6
+ 
+    # --- Responses to 1. e4 ---
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",  # 1...e5 -> 2. Nf3
+    "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R": "f1b5",  # ...Nc6 -> Ruy Lopez
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR": "g1f3",  # 1...c5 -> Sicilian
+    "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R": "d2d4",  # Sicilian, ...d6
+    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 1...e6 -> French
+    "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 1...c6 -> Caro-Kann
+    "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR": "e4d5",  # 1...d5 -> Scandinavian
+    "rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 1...g6 -> Modern
+    "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR": "e4e5",  # 1...Nf6 -> Alekhine's
+    "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR": "d2d4",  # 1...d6 -> Pirc setup
+ 
+    # --- Responses to 1. d4 ---
+    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR": "c2c4",  # 1...d5 -> Queen's Gambit
+    "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR": "b1c3",  # QGD, ...e6
+    "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR": "g1f3",  # Slav, ...c6
+    "rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR": "c2c4",  # 1...Nf6 -> Indian systems
+    "rnbqkb1r/pppppp1p/5np1/8/2PP4/8/PP2PPPP/RNBQKBNR": "b1c3",  # ...g6 -> King's Indian
+    "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/8/PP2PPPP/RNBQKBNR": "b1c3",  # ...e6 -> Nimzo/QID setup
+    "rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR": "g2g3",  # 1...f5 -> Dutch Defense
 }
  
 # Piece-Square Tables (White's perspective)
@@ -341,35 +377,6 @@ def get_mobility_score(board: chess.Board) -> int:
  
     return mobility_score
  
-def evaluate_hanging_pieces(board: chess.Board) -> int:
-    """Penalizes pieces that are attacked more times than they are defended.
- 
-    NOTE: This used to be mis-indented so it only ever ran once, on
-    whichever piece happened to be last in board.piece_map().items() -
-    it never actually checked most pieces on the board. That's why the
-    engine would casually leave pieces hanging: this safety check was
-    silently a no-op for ~63 of the 64 squares. Fixed by keeping the
-    attacker/defender check inside the loop over every piece.
-    """
-    score = 0
- 
-    for square, piece in board.piece_map().items():
-        if piece.piece_type == chess.KING:
-            continue
- 
-        attackers = len(board.attackers(not piece.color, square))
-        defenders = len(board.attackers(piece.color, square))
- 
-        if attackers > defenders:
-            loss = PIECE_VALUES[piece.piece_type] // 3
- 
-            if piece.color == chess.WHITE:
-                score -= loss
-            else:
-                score += loss
- 
-    return score
- 
 def evaluate_repetition(board: chess.Board) -> int:
     """Penalizes unnecessary repetitions when ahead."""
     
@@ -401,25 +408,43 @@ def evaluate_board(board: chess.Board) -> int:
     score = 0
     in_endgame = is_endgame(board)
  
-    # 0. Hanging piece safety check (was previously broken - see function docstring)
-    score += evaluate_hanging_pieces(board)
- 
-    # 1. Material + Piece-Square Tables (White is positive, Black is negative)
-    for square, piece in board.piece_map().items():
-        val = PIECE_VALUES[piece.piece_type] + get_pst_value(
-            piece.piece_type,
-            square,
-            piece.color,
-            in_endgame
-        )
-        score += val if piece.color == chess.WHITE else -val
- 
-    # Encourage simplification when ahead
+    # Material + PST + hanging-piece safety + material balance, all in one
+    # pass. These used to be three separate functions/loops, each calling
+    # board.piece_map() itself (which rebuilds a full dict from the
+    # underlying bitboards every time) and iterating every piece on the
+    # board independently - three full board scans per evaluate_board
+    # call, which itself runs on every leaf and every quiescence node
+    # (the majority of all nodes searched). One combined pass now does
+    # the same work for the cost of one scan.
     material_balance = 0
  
-    for piece in board.piece_map().values():
-        value = PIECE_VALUES[piece.piece_type]
-        material_balance += value if piece.color == chess.WHITE else -value
+    for square, piece in board.piece_map().items():
+        piece_value = PIECE_VALUES[piece.piece_type]
+        is_white = piece.color == chess.WHITE
+ 
+        # 1. Material + Piece-Square Tables
+        val = piece_value + get_pst_value(piece.piece_type, square, piece.color, in_endgame)
+        score += val if is_white else -val
+ 
+        # Material balance, used below for the simplification bonus
+        material_balance += piece_value if is_white else -piece_value
+ 
+        # 0. Hanging piece safety check (was previously broken - see
+        # note further down about the old mis-indented version)
+        if piece.piece_type != chess.KING:
+            attackers = len(board.attackers(not piece.color, square))
+            defenders = len(board.attackers(piece.color, square))
+            if attackers > defenders:
+                loss = piece_value // 3
+                score += -loss if is_white else loss
+ 
+    # NOTE on the hanging-piece check above: this used to be its own
+    # function with the attacker/defender check mis-indented outside the
+    # loop, so it only ever ran once, on whichever piece happened to be
+    # last in board.piece_map().items() - it never actually checked most
+    # pieces on the board. That's why the engine would casually leave
+    # pieces hanging. Fixed by keeping the check inside the loop over
+    # every piece (now folded into the combined loop above).
  
     # Encourage simplification when ahead: the standard chess principle is
     # trade PIECES, keep PAWNS - extra pawns are what actually wins a won
@@ -619,7 +644,23 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
  
     return alpha
  
-def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
+def _has_non_pawn_material(board: chess.Board, color: chess.Color) -> bool:
+    """True if `color` has any piece besides pawns/king.
+ 
+    Gates null-move pruning: in king-and-pawn-only positions, "passing"
+    can genuinely be the best move in the position (zugzwang), so
+    assuming that skipping a turn can only make things worse - which is
+    the whole premise null-move pruning relies on - stops holding.
+    """
+    return bool(
+        len(board.pieces(chess.KNIGHT, color))
+        or len(board.pieces(chess.BISHOP, color))
+        or len(board.pieces(chess.ROOK, color))
+        or len(board.pieces(chess.QUEEN, color))
+    )
+ 
+ 
+def negamax(board: chess.Board, depth: int, alpha: int, beta: int, allow_null: bool = True) -> int:
     """Negamax search algorithm with Alpha-Beta pruning, move ordering,
     and a transposition table."""
  
@@ -679,6 +720,36 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
  
         _tt_store(key, depth, score, flag, None)
         return score
+ 
+    # Null-move pruning. Skipped when: in check (the null move would
+    # leave "us" in check, which isn't a legal position to reason from);
+    # too shallow to reduce further (see NULL_MOVE_MIN_DEPTH's invariant
+    # note above); near a mate score (mate distances get distorted by
+    # the reduction, so don't risk pruning a real mate line); in a
+    # zugzwang-prone king/pawn ending; or already inside a null-move
+    # search (allow_null=False), so two passes can't chain together.
+    if (
+        allow_null
+        and depth >= NULL_MOVE_MIN_DEPTH
+        and not board.is_check()
+        and abs(beta) < MATE_SCORE_THRESHOLD
+        and _has_non_pawn_material(board, board.turn)
+    ):
+        board.push(chess.Move.null())
+        null_score = -negamax(
+            board,
+            depth - 1 - NULL_MOVE_REDUCTION,
+            -beta,
+            -beta + 1,
+            allow_null=False,
+        )
+        board.pop()
+ 
+        if null_score >= beta:
+            # Even giving the opponent a free extra move wasn't enough to
+            # stop us clearing beta - this branch is winning enough that
+            # it's not worth searching properly.
+            return beta
  
     max_score = -float('inf')
     best_move_here = None
@@ -746,7 +817,8 @@ def _tt_store(key: int, depth: int, score: int, flag: int, move) -> None:
         transposition_table.clear()
     transposition_table[key] = (depth, score, flag, move)
  
-def search_at_depth(board: chess.Board, depth: int):
+def search_at_depth(board: chess.Board, depth: int, alpha: float = -float('inf'),
+                     beta: float = float('inf')):
     """Search one specific depth. Returns (best_move, best_score) - the
     score is needed so the UCI layer can report a real eval instead of a
     hardcoded placeholder.
@@ -755,13 +827,18 @@ def search_at_depth(board: chess.Board, depth: int):
     position (e.g. from the previous, shallower iterative-deepening pass)
     to order moves at the root, then updates the table so the *next*
     depth iteration gets the improved move ordering in turn.
+ 
+    alpha/beta default to a full (-inf, inf) window, but get_best_move
+    passes a narrow "aspiration" window once it has a previous depth's
+    score to guess around - a tighter window lets every internal node in
+    the tree prune far more aggressively. If the true score falls outside
+    whatever window was passed in, the returned score is only a bound
+    (not exact) and the caller is expected to re-search with a wider
+    window - this function doesn't detect or handle that itself.
     """
  
     best_move = None
     best_score = -float('inf')
- 
-    alpha = -float('inf')
-    beta = float('inf')
  
     key = _position_key(board)
     tt_entry = transposition_table.get(key)
@@ -836,17 +913,44 @@ def get_best_move(board: chess.Board, max_depth: int = DEFAULT_MAX_DEPTH):
     killer_moves.clear()
  
     best_move = None
+    prev_score = None
+ 
+    # How far around the previous depth's score to search first. A
+    # position's evaluation rarely swings wildly from one depth to the
+    # next, so most iterations only need to explore this narrow slice -
+    # and every internal node benefits from the tighter alpha/beta window,
+    # not just the root.
+    ASPIRATION_WINDOW = 50  # centipawns
  
     # Search depth 1, then 2, then 3...
     for depth in range(1, max_depth + 1):
  
-        move, score = search_at_depth(
-            board,
-            depth
-        )
+        if prev_score is None:
+            # No prior score to aspire around yet (first iteration, or a
+            # mate score last time - see the widen-on-miss fallback below).
+            alpha, beta = -float('inf'), float('inf')
+        else:
+            alpha = prev_score - ASPIRATION_WINDOW
+            beta = prev_score + ASPIRATION_WINDOW
+ 
+        move, score = search_at_depth(board, depth, alpha, beta)
+ 
+        # The window missed: what came back is only a bound on the real
+        # score, not the score itself, so it can't be trusted or reported.
+        # Re-search this same depth with a full window before using it -
+        # this keeps aspiration windows a pure speed optimization with no
+        # effect on correctness, at the cost of occasionally paying for a
+        # depth twice.
+        if score <= alpha or score >= beta:
+            move, score = search_at_depth(board, depth, -float('inf'), float('inf'))
  
         if move:
             best_move = move
+ 
+        # Don't aspire around a mate score next iteration - a mate found
+        # at one depth can look completely different (or vanish) a ply
+        # deeper, so a narrow window here would just guarantee a re-search.
+        prev_score = score if abs(score) < MATE_SCORE_THRESHOLD else None
  
         pv_moves = extract_pv(board, depth)
         if not pv_moves and best_move is not None:
@@ -876,7 +980,7 @@ def uci_loop():
  
         line = line.strip()
         if line == "uci":
-            print("id name Zugzwang v0.4")
+            print("id name Zugzwang")
             print("id author Zugzwang contributors")
             print(f"option name Depth type spin default {DEFAULT_MAX_DEPTH} min 1 max {MAX_ALLOWED_DEPTH}")
             print("uciok")
