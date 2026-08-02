@@ -321,15 +321,30 @@ def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
         alpha = stand_pat
 
     for move in board.legal_moves:
-        if board.is_capture(move):
-            board.push(move)
-            score = -quiescence_search(board, -beta, -alpha)
-            board.pop()
 
-            if score >= beta:
-                return beta
-            if score > alpha:
-                alpha = score
+    # Only search forcing moves
+    if not (
+        board.is_capture(move)
+        or board.gives_check(move)
+        or move.promotion
+    ):
+        continue
+
+    board.push(move)
+
+    score = -quiescence_search(
+        board,
+        -beta,
+        -alpha
+    )
+
+    board.pop()
+
+    if score >= beta:
+        return beta
+
+    if score > alpha:
+        alpha = score
 
     return alpha
 
@@ -357,11 +372,6 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
 
     return max_score
 
-def negamax(board: chess.Board, depth: int, alpha: float, beta: float) -> float:
-    """Core Negamax search loop with Alpha-Beta pruning cutoffs."""
-    if depth == 0 or board.is_game_over():
-        return evaluate_board(board)
-
     max_score = -float('inf')
     
     # Your custom sorting system ensures the best moves are checked first
@@ -382,31 +392,62 @@ def negamax(board: chess.Board, depth: int, alpha: float, beta: float) -> float:
             
     return max_score
 
-def get_best_move(board: chess.Board, depth: int = 4) -> chess.Move:
-    """Finds best move using pruned Negamax search or opening book."""
-    board_fen_position = board.fen().split(" ")[0]
-    if board_fen_position in OPENING_BOOK:
-        return chess.Move.from_uci(OPENING_BOOK[board_fen_position])
+def search_at_depth(board: chess.Board, depth: int):
+    """Search one specific depth."""
 
     best_move = None
     best_score = -float('inf')
+
     alpha = -float('inf')
     beta = float('inf')
 
     for move in order_moves(board):
+
         board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha)
+
+        score = -negamax(
+            board,
+            depth - 1,
+            -beta,
+            -alpha
+        )
+
         board.pop()
 
         if score > best_score:
             best_score = score
             best_move = move
+
         if score > alpha:
             alpha = score
-            
-        # Cutoff check on the root node loop as well
-        if alpha >= beta:
-            break
+
+    return best_move
+
+def get_best_move(board: chess.Board, max_depth: int = 5):
+    """Iterative deepening search."""
+
+    # Opening book first
+    board_fen_position = board.fen().split(" ")[0]
+
+    if board_fen_position in OPENING_BOOK:
+        return chess.Move.from_uci(
+            OPENING_BOOK[board_fen_position]
+        )
+
+
+    best_move = None
+
+    # Search depth 1, then 2, then 3...
+    for depth in range(1, max_depth + 1):
+
+        move = search_at_depth(
+            board,
+            depth
+        )
+
+        if move:
+            best_move = move
+
 
     return best_move if best_move else list(board.legal_moves)[0]
 
@@ -454,7 +495,7 @@ def uci_loop():
                         board.push_uci(move_str)
 
         elif line.startswith("go"):
-            best_move = get_best_move(board, depth=3)
+            best_move = get_best_move(board, depth=5)
             print(f"info depth 3 score cp 0 pv {best_move.uci()}")
             sys.stdout.flush()
             print(f"bestmove {best_move.uci()}")
