@@ -345,8 +345,33 @@ def negamax(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
 
     return max_score
 
-def get_best_move(board: chess.Board, depth: int = 3) -> chess.Move:
-    """Finds best move using Negamax search or opening book."""
+def negamax(board: chess.Board, depth: int, alpha: float, beta: float) -> float:
+    """Core Negamax search loop with Alpha-Beta pruning cutoffs."""
+    if depth == 0 or board.is_game_over():
+        return evaluate_board(board)
+
+    max_score = -float('inf')
+    
+    # Your custom sorting system ensures the best moves are checked first
+    for move in order_moves(board):
+        board.push(move)
+        # In Negamax, you flip the sign and swap/negate the alpha/beta boundaries
+        score = -negamax(board, depth - 1, -beta, -alpha)
+        board.pop()
+
+        if score > max_score:
+            max_score = score
+        if max_score > alpha:
+            alpha = max_score
+        
+        # THE SPEED FIX: Alpha-Beta cutoff happens right here
+        if alpha >= beta:
+            break  # Stop searching this useless branch completely
+            
+    return max_score
+
+def get_best_move(board: chess.Board, depth: int = 4) -> chess.Move:
+    """Finds best move using pruned Negamax search or opening book."""
     board_fen_position = board.fen().split(" ")[0]
     if board_fen_position in OPENING_BOOK:
         return chess.Move.from_uci(OPENING_BOOK[board_fen_position])
@@ -366,8 +391,13 @@ def get_best_move(board: chess.Board, depth: int = 3) -> chess.Move:
             best_move = move
         if score > alpha:
             alpha = score
+            
+        # Cutoff check on the root node loop as well
+        if alpha >= beta:
+            break
 
     return best_move if best_move else list(board.legal_moves)[0]
+
 
 def uci_loop():
     """Main UCI Protocol Loop."""
