@@ -312,39 +312,40 @@ def order_moves(board: chess.Board) -> list:
     return moves
 
 def quiescence_search(board: chess.Board, alpha: int, beta: int) -> int:
-    """Searches captures until a stable position is reached."""
+    """Searches captures, checks, and promotions until a stable position is reached."""
+
     stand_pat = evaluate_board(board)
-    
+
     if stand_pat >= beta:
         return beta
-    if alpha < stand_pat:
+
+    if stand_pat > alpha:
         alpha = stand_pat
 
     for move in board.legal_moves:
 
-    # Only search forcing moves
-    if not (
-        board.is_capture(move)
-        or board.gives_check(move)
-        or move.promotion
-    ):
-        continue
+        if not (
+            board.is_capture(move)
+            or board.gives_check(move)
+            or move.promotion
+        ):
+            continue
 
-    board.push(move)
+        board.push(move)
 
-    score = -quiescence_search(
-        board,
-        -beta,
-        -alpha
-    )
+        score = -quiescence_search(
+            board,
+            -beta,
+            -alpha
+        )
 
-    board.pop()
+        board.pop()
 
-    if score >= beta:
-        return beta
+        if score >= beta:
+            return beta
 
-    if score > alpha:
-        alpha = score
+        if score > alpha:
+            alpha = score
 
     return alpha
 
@@ -495,7 +496,7 @@ def uci_loop():
                         board.push_uci(move_str)
 
         elif line.startswith("go"):
-            best_move = get_best_move(board, depth=5)
+            best_move = get_best_move(board, max_depth=5)
             print(f"info depth 3 score cp 0 pv {best_move.uci()}")
             sys.stdout.flush()
             print(f"bestmove {best_move.uci()}")
