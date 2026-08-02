@@ -422,7 +422,7 @@ def uci_loop():
 
         line = line.strip()
         if line == "uci":
-            print("id name Zugzwang v0.1")
+            print("id name Zugzwang v0.21")
             print("uciok")
             sys.stdout.flush()
         elif line == "isready":
